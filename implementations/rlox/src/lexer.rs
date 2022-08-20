@@ -3,7 +3,7 @@ use std::fmt;
 use crate::errors;
 use crate::scanner;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum WhitespaceKind {
     Space,
     Tab,
@@ -11,7 +11,7 @@ pub enum WhitespaceKind {
     Newline,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token {
     LeftParen,
     RightParen,
@@ -24,7 +24,7 @@ impl fmt::Display for Token {
         let value = match self {
             Token::LeftParen => String::from("("),
             Token::RightParen => String::from(")"),
-            Token::Whitespace(whitespace) => format!("whitespace {:?}", whitespace),
+            Token::Whitespace(whitespace) => format!("Whitespace {:?}", whitespace),
             Token::Eof => String::from("Eof"),
         };
         write!(f, "{}", value)
@@ -35,6 +35,32 @@ impl fmt::Display for Token {
 pub struct SourceToken {
     pub token: Token,
     pub location: scanner::SourceSpan,
+}
+
+impl fmt::Display for SourceToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // The EOF token is artificially inserted by the lexer when the scanner runs out of tokens.
+        // When the scanner runs out of tokens, it doesn't increment its internal cursor, so its
+        // cursor would have a length of 0. Checking for EOF rather than the pathololgical case of
+        // a zero length cursor is more explicit. A zero length cursor could represent either a
+        // scanner that has exhausted the symbol sequence, or a scanner that simply hasn't begun
+        // scanning anything with it's current cursor.
+        let location_string = if self.location.length() == 1 || self.token == Token::Eof {
+            format!(
+                "[{}:{}]",
+                self.location.begin.line, self.location.begin.column
+            )
+        } else {
+            format!(
+                "[{}:{} -> {}:{}]",
+                self.location.begin.line,
+                self.location.begin.column,
+                self.location.end.line,
+                self.location.end.column
+            )
+        };
+        write!(f, "\"{}\"::{}", self.token, location_string)
+    }
 }
 
 /// The object through which the source is consumed and transformed into a token sequence
@@ -56,6 +82,7 @@ impl Lexer {
                 Err(error) => panic!("{}", error), // TODO: Use ErrorLog or smth
             }
         }
+        // self.scanner.snap_cursor_to_head();
         ret.push(SourceToken {
             token: Token::Eof,
             location: self.scanner.get_cursor(),
@@ -63,7 +90,7 @@ impl Lexer {
         ret
     }
     pub fn scan_next_token(&mut self) -> Option<Result<SourceToken, errors::Error>> {
-        if let Some(symbol) = self.consume_next_symbol() {
+        if let Some(symbol) = self.scanner.scan_next() {
             let token_result = match symbol.as_ref() {
                 "(" => Ok(Token::LeftParen),
                 ")" => Ok(Token::RightParen),
@@ -89,11 +116,9 @@ impl Lexer {
                 })),
                 Err(error) => Some(Err(error)),
             };
+            self.scanner.snap_cursor_to_head();
             return ret;
         }
         None
-    }
-    fn consume_next_symbol(&mut self) -> Option<scanner::Symbol> {
-        return self.scanner.scan_curr();
     }
 }

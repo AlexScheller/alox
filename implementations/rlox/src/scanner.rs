@@ -23,23 +23,62 @@ impl Scanner {
     pub fn get_cursor(&self) -> SourceSpan {
         return self.cursor;
     }
+    pub fn snap_cursor_to_head(&mut self) {
+        self.cursor.snap_to_head();
+    }
     // Consumes current symbol (if any) and advances the cursor
-    pub fn scan_curr(&mut self) -> Option<Symbol> {
-        if let Some(curr) = self.symbols.get(self.cursor.end.index) {
-            self.cursor.end.advance(curr);
+    pub fn scan_next(&mut self) -> Option<Symbol> {
+        if let Some(curr) = self.symbols.get(self.cursor.head()) {
+            self.cursor.extend(curr);
+            return Some(String::from(curr));
+        }
+        None
+    }
+    pub fn peek_curr(&mut self) -> Option<Symbol> {
+        if let Some(curr) = self.symbols.get(self.cursor.head()) {
             return Some(String::from(curr));
         }
         None
     }
 }
 
+/// SourceSpan represent one to many symbols in linear sequence in source.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct SourceSpan {
+    /// Inclusive/Open
+    pub begin: SourceLocation,
+    /// Exclusive/Closed
+    pub end: SourceLocation,
+}
+
+impl SourceSpan {
+    pub fn new() -> Self {
+        SourceSpan {
+            begin: SourceLocation::new(),
+            end: SourceLocation::new(),
+        }
+    }
+    pub fn length(&self) -> usize {
+        return self.end.index - self.begin.index;
+    }
+    pub fn head(&self) -> usize {
+        return self.end.index;
+    }
+    pub fn extend(&mut self, symbol: &str) {
+        self.end.advance(symbol)
+    }
+    pub fn snap_to_head(&mut self) {
+        self.begin = self.end;
+    }
+}
+
 /// A SourceLocation represents the location of a single symbol in the source.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct SourceLocation {
-    pub line: usize,
-    pub column: usize,
+    pub line: usize,   // 1 indexed
+    pub column: usize, // 1 indexed
     /// The absolute index into the source, regardless of which line or or column.
-    pub index: usize,
+    pub index: usize, // 0 indexed
 }
 
 impl SourceLocation {
@@ -65,26 +104,5 @@ impl SourceLocation {
         } else {
             self.increment_column();
         }
-    }
-}
-
-/// SourceSpan represent one to many symbols in linear sequence in source.
-#[derive(Debug, Clone, Copy)]
-pub struct SourceSpan {
-    /// Inclusive/Open
-    pub begin: SourceLocation,
-    /// Exclusive/Closed
-    pub end: SourceLocation,
-}
-
-impl SourceSpan {
-    pub fn new() -> Self {
-        SourceSpan {
-            begin: SourceLocation::new(),
-            end: SourceLocation::new(),
-        }
-    }
-    pub fn close(&mut self) {
-        self.begin = self.end;
     }
 }

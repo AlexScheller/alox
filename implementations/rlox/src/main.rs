@@ -36,6 +36,6 @@ fn interpret(source: &str) {
     let mut lexer = lexer::Lexer::new(scanner);
     let tokens = lexer.generate_tokens();
     for token in tokens {
-        println!("{:?}", token);
+        println!("{}", token);
     }
 }
