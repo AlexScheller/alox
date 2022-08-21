@@ -423,23 +423,15 @@ impl Lexer {
                 break;
                 // Note that to throw an error here is too eager. Just because we encounter a non
                 // alphanumeric character doesn't mean there's an error. The identifier has to
-                // terminate *somehow* after all. To be correct, there needs to be some logic built
-                // in that determines what characters are acceptable to terminate an identifier
-                // or keyword. If the char isn't alphanumeric *and* not one of these acceptable
-                // characters, only *then* should an error be thrown.
-                // // Consume the next symbol to make the subject/location accurate for the error
-                // // message.
-                // self.scanner.scan_next();
-                // return Err(errors::Error {
-                //     kind: errors::ErrorKind::Scanning,
-                //     description: errors::ErrorDescription {
-                //         subject: Some(self.scanner.get_selection()),
-                //         location: Some(self.scanner.get_cursor()),
-                //         description: String::from(
-                //             "Non-alphanumeric symbol encountered while processing identifier/keyword.",
-                //         ),
-                //     },
-                // });
+                // terminate *somehow* after all.
+                //
+                // That being said, right now an incorrectly named identifier will be caught as a
+                // parsing error, rather than a lexing error. It would be more helpful to catch it
+                // here as a lexing error so that a clearer error message can be dispalyed.
+                // To support that, there needs to be some logic built in that determines what
+                // characters are acceptable to terminate an identifier or keyword. If the char
+                // isn't alphanumeric *and* not one of these acceptable characters, only *then*
+                // should an error be thrown.
             }
         }
         let value = self.scanner.get_selection();
