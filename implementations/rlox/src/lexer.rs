@@ -23,6 +23,8 @@ impl fmt::Debug for WhitespaceKind {
     }
 }
 
+pub type Identifier = String;
+
 #[derive(Debug, PartialEq)]
 pub enum Token {
     // --- Singles ---
@@ -49,7 +51,26 @@ pub enum Token {
     GreaterEqual,
     LessEqual,
     // --- Literals ---
+    Identifier(Identifier), // Note if this ever changes then other representations of identifiers will need to also.
+    String(String),
     Number(f64),
+    // --- Keywords ---
+    And,
+    Class,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
     // --- Meta ---
     Comment(String),
     Whitespace(WhitespaceKind),
@@ -83,7 +104,26 @@ impl fmt::Display for Token {
             Token::GreaterEqual => String::from(">="),
             Token::LessEqual => String::from("<="),
             // --- Literals ---
+            Token::Identifier(identifier) => format!("identifier \"{}\"", identifier),
+            Token::String(string) => format!("string \"{}\"", string),
             Token::Number(number) => format!("number \"{}\"", number),
+            // --- Keywords ---
+            Token::And => String::from("and"),
+            Token::Class => String::from("class"),
+            Token::Else => String::from("else"),
+            Token::False => String::from("false"),
+            Token::Fun => String::from("fun"),
+            Token::For => String::from("for"),
+            Token::If => String::from("if"),
+            Token::Nil => String::from("nil"),
+            Token::Or => String::from("or"),
+            Token::Print => String::from("print"),
+            Token::Return => String::from("return"),
+            Token::Super => String::from("super"),
+            Token::This => String::from("this"),
+            Token::True => String::from("true"),
+            Token::Var => String::from("var"),
+            Token::While => String::from("while"),
             // --- Meta ---
             Token::Comment(comment) => format!("comment \"{}\"", comment),
             Token::Whitespace(whitespace) => format!("Whitespace {:?}", whitespace),
@@ -140,6 +180,44 @@ fn is_digit(symbol: &str) -> bool {
     match symbol {
         "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => true,
         _ => false,
+    }
+}
+
+// Again, I would really prefer not to do this, but using `grapheme_to_char` seems wrong.
+fn is_alpha(symbol: &str) -> bool {
+    match symbol {
+        "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o"
+        | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" => true,
+        "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O"
+        | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" => true,
+        "_" => true, // Hmm, technically not alpha...
+        _ => false,
+    }
+}
+
+fn is_alpha_numeric(symbol: &str) -> bool {
+    is_alpha(symbol) || is_digit(symbol)
+}
+
+fn match_keyword(symbol: &str) -> Option<Token> {
+    match symbol {
+        "and" => Some(Token::And),
+        "class" => Some(Token::Class),
+        "else" => Some(Token::Else),
+        "false" => Some(Token::False),
+        "for" => Some(Token::For),
+        "fun" => Some(Token::Fun),
+        "if" => Some(Token::If),
+        "nil" => Some(Token::Nil),
+        "or" => Some(Token::Or),
+        "print" => Some(Token::Print),
+        "return" => Some(Token::Return),
+        "super" => Some(Token::Super),
+        "this" => Some(Token::This),
+        "true" => Some(Token::True),
+        "var" => Some(Token::Var),
+        "while" => Some(Token::While),
+        _ => None,
     }
 }
 
@@ -238,7 +316,10 @@ impl Lexer {
                 "\r" => Ok(Token::Whitespace(WhitespaceKind::Return)),
                 "\t" => Ok(Token::Whitespace(WhitespaceKind::Tab)),
                 "\n" => Ok(Token::Whitespace(WhitespaceKind::Newline)),
-                digit if is_digit(digit) => self.consume_number(), // better name
+                // --- Literals ---
+                "\"" => self.consume_string(),
+                digit if is_digit(digit) => self.consume_number(),
+                identifier if is_alpha(identifier) => self.consume_identifier_or_keyword(),
                 _ => Err(errors::Error {
                     kind: errors::ErrorKind::Scanning,
                     description: errors::ErrorDescription {
@@ -251,7 +332,6 @@ impl Lexer {
             let ret = match token_result {
                 Ok(token) => Some(Ok(SourceToken {
                     token,
-                    // This is now prolly going to be wrong with the scanner handling the cursor...
                     location: self.scanner.get_cursor(),
                 })),
                 Err(error) => Some(Err(error)),
@@ -260,6 +340,24 @@ impl Lexer {
             return ret;
         }
         None
+    }
+    fn consume_string(&mut self) -> Result<Token, errors::Error> {
+        while let Some(symbol) = self.scanner.scan_next() {
+            if symbol == "\"" {
+                let string_value = self.scanner.get_selection();
+                return Ok(Token::String(
+                    string_value[1..string_value.len() - 1].to_string(), // Remove double quotes.
+                ));
+            }
+        }
+        Err(errors::Error {
+            kind: errors::ErrorKind::Scanning,
+            description: errors::ErrorDescription {
+                subject: Some(self.scanner.get_selection()),
+                location: Some(self.scanner.get_cursor()),
+                description: String::from("Unterminated String"),
+            },
+        })
     }
     fn consume_number(&mut self) -> Result<Token, errors::Error> {
         self.consume_digits();
@@ -314,6 +412,41 @@ impl Lexer {
             } else {
                 break;
             }
+        }
+    }
+    // Will this ever need to be split up?
+    fn consume_identifier_or_keyword(&mut self) -> Result<Token, errors::Error> {
+        while let Some(symbol) = self.scanner.peek_next() {
+            if is_alpha_numeric(&symbol) {
+                self.scanner.scan_next();
+            } else {
+                break;
+                // Note that to throw an error here is too eager. Just because we encounter a non
+                // alphanumeric character doesn't mean there's an error. The identifier has to
+                // terminate *somehow* after all. To be correct, there needs to be some logic built
+                // in that determines what characters are acceptable to terminate an identifier
+                // or keyword. If the char isn't alphanumeric *and* not one of these acceptable
+                // characters, only *then* should an error be thrown.
+                // // Consume the next symbol to make the subject/location accurate for the error
+                // // message.
+                // self.scanner.scan_next();
+                // return Err(errors::Error {
+                //     kind: errors::ErrorKind::Scanning,
+                //     description: errors::ErrorDescription {
+                //         subject: Some(self.scanner.get_selection()),
+                //         location: Some(self.scanner.get_cursor()),
+                //         description: String::from(
+                //             "Non-alphanumeric symbol encountered while processing identifier/keyword.",
+                //         ),
+                //     },
+                // });
+            }
+        }
+        let value = self.scanner.get_selection();
+        if let Some(keyword) = match_keyword(&value) {
+            Ok(keyword)
+        } else {
+            Ok(Token::Identifier(value))
         }
     }
 }
