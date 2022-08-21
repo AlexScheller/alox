@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, process};
 
 use crate::scanner;
 
@@ -47,4 +47,8 @@ impl fmt::Display for Error {
             location_string, kind_string, self.description.description, subject_string
         )
     }
+}
+
+pub fn exit_with_code(code: exitcode::ExitCode) {
+    process::exit(code);
 }

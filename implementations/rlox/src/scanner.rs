@@ -34,7 +34,17 @@ impl Scanner {
         }
         None
     }
-    pub fn peek_curr(&mut self) -> Option<Symbol> {
+    // Consumes current symbol if it matches a target, and advances the cursor
+    pub fn match_scan_next(&mut self, target: &str) -> bool {
+        if let Some(curr) = self.symbols.get(self.cursor.head()) {
+            if curr == target {
+                self.cursor.extend(curr);
+                return true;
+            }
+        }
+        false
+    }
+    pub fn peek_next(&mut self) -> Option<Symbol> {
         if let Some(curr) = self.symbols.get(self.cursor.head()) {
             return Some(String::from(curr));
         }

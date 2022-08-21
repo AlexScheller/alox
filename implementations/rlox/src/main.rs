@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env, fs,
     io::{self, Write},
 };
 
@@ -9,11 +9,20 @@ mod scanner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
-        println!("Usage: garden");
+    if args.len() > 2 {
+        println!("Usage: rlox [script]");
+        errors::exit_with_code(exitcode::USAGE);
+    } else if args.len() == 2 {
+        interpret_file(&args[1]);
     } else {
         interpret_prompt();
     }
+}
+
+fn interpret_file(file_name: &str) {
+    let contents =
+        fs::read_to_string(file_name).expect(&format!("Failed to read file: {}", file_name));
+    interpret(contents)
 }
 
 fn interpret_prompt() {
@@ -27,11 +36,11 @@ fn interpret_prompt() {
         if line == "\n" {
             break;
         }
-        interpret(&line);
+        interpret(line);
     }
 }
 
-fn interpret(source: &str) {
+fn interpret(source: String) {
     let scanner = scanner::Scanner::new(String::from(source));
     let mut lexer = lexer::Lexer::new(scanner);
     let tokens = lexer.generate_tokens();

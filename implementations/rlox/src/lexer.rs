@@ -13,8 +13,31 @@ pub enum WhitespaceKind {
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    // --- Singles ---
     LeftParen,
     RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    QuestionMark,
+    Colon,
+    Bang,
+    Equal,
+    Greater,
+    Less,
+    // --- Pairs ---
+    BangEqual,
+    EqualEqual,
+    GreaterEqual,
+    LessEqual,
+    // --- Meta ---
+    Comment(String),
     Whitespace(WhitespaceKind),
     Eof,
 }
@@ -22,8 +45,31 @@ pub enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
+            // --- Singles ---
             Token::LeftParen => String::from("("),
             Token::RightParen => String::from(")"),
+            Token::LeftBrace => String::from("{"),
+            Token::RightBrace => String::from("}"),
+            Token::Comma => String::from(","),
+            Token::Dot => String::from("."),
+            Token::Minus => String::from("-"),
+            Token::Plus => String::from("+"),
+            Token::Semicolon => String::from(";"),
+            Token::Slash => String::from("/"),
+            Token::Star => String::from("*"),
+            Token::QuestionMark => String::from("?"),
+            Token::Colon => String::from(":"),
+            Token::Bang => String::from("!"),
+            Token::Equal => String::from("="),
+            Token::Greater => String::from(">"),
+            Token::Less => String::from("<"),
+            // --- Pairs ---
+            Token::BangEqual => String::from("!="),
+            Token::EqualEqual => String::from("=="),
+            Token::GreaterEqual => String::from(">="),
+            Token::LessEqual => String::from("<="),
+            // --- Meta ---
+            Token::Comment(comment) => format!("comment \"{}\"", comment),
             Token::Whitespace(whitespace) => format!("Whitespace {:?}", whitespace),
             Token::Eof => String::from("Eof"),
         };
@@ -56,7 +102,9 @@ impl fmt::Display for SourceToken {
                 self.location.begin.line,
                 self.location.begin.column,
                 self.location.end.line,
-                self.location.end.column
+                // "end" is actually one past the end of a sequence in terms of how we might think
+                // of it when looking at it in a text editor.
+                self.location.end.column - 1
             )
         };
         write!(f, "\"{}\"::{}", self.token, location_string)
@@ -92,8 +140,65 @@ impl Lexer {
     pub fn scan_next_token(&mut self) -> Option<Result<SourceToken, errors::Error>> {
         if let Some(symbol) = self.scanner.scan_next() {
             let token_result = match symbol.as_ref() {
+                // --- Singles ---
                 "(" => Ok(Token::LeftParen),
                 ")" => Ok(Token::RightParen),
+                "{" => Ok(Token::LeftBrace),
+                "}" => Ok(Token::RightBrace),
+                "," => Ok(Token::Comma),
+                "." => Ok(Token::Dot),
+                "-" => Ok(Token::Minus),
+                "+" => Ok(Token::Plus),
+                ";" => Ok(Token::Semicolon),
+                "*" => Ok(Token::Star),
+                "?" => Ok(Token::QuestionMark),
+                ":" => Ok(Token::Colon),
+                // --- Potential Pairs ---
+                "!" => {
+                    if self.scanner.match_scan_next("=") {
+                        Ok(Token::BangEqual)
+                    } else {
+                        Ok(Token::Bang)
+                    }
+                }
+                "=" => {
+                    if self.scanner.match_scan_next("=") {
+                        Ok(Token::EqualEqual)
+                    } else {
+                        Ok(Token::Equal)
+                    }
+                }
+                "<" => {
+                    if self.scanner.match_scan_next("=") {
+                        Ok(Token::LessEqual)
+                    } else {
+                        Ok(Token::Less)
+                    }
+                }
+                ">" => {
+                    if self.scanner.match_scan_next("=") {
+                        Ok(Token::GreaterEqual)
+                    } else {
+                        Ok(Token::Greater)
+                    }
+                }
+                // --- Comment/Division ---
+                // It would truly be better to keep these separate and just use `#` for comments.
+                "/" => {
+                    if self.scanner.match_scan_next("/") {
+                        let mut content = String::from("//");
+                        while let Some(symbol) = self.scanner.peek_next() {
+                            if symbol == "\n" {
+                                break;
+                            }
+                            content.push_str(&symbol);
+                            self.scanner.scan_next();
+                        }
+                        Ok(Token::Comment(content))
+                    } else {
+                        Ok(Token::Slash)
+                    }
+                }
                 // --- Whitespace ---
                 " " => Ok(Token::Whitespace(WhitespaceKind::Space)),
                 "\r" => Ok(Token::Whitespace(WhitespaceKind::Return)),
