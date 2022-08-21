@@ -1,6 +1,11 @@
 use std::{fmt, process};
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::scanner;
+
+// TODO: put this in a config somewhere?
+const USE_EXTENDED_UNICODE: bool = true;
 
 pub struct ErrorDescription {
     pub subject: Option<String>,
@@ -17,6 +22,19 @@ pub enum ErrorKind {
 pub struct Error {
     pub kind: ErrorKind,
     pub description: ErrorDescription,
+}
+
+fn normalize_whitespace_chars_for_display(contents: &String) -> String {
+    contents
+        .graphemes(USE_EXTENDED_UNICODE)
+        .map(|grapheme| match grapheme.as_ref() {
+            " " => String::from("\\s"),
+            "\r" => String::from("\\r"),
+            "\t" => String::from("\\t"),
+            "\n" => String::from("\\n"),
+            _ => String::from(grapheme),
+        })
+        .collect()
 }
 
 impl fmt::Display for Error {
@@ -36,7 +54,10 @@ impl fmt::Display for Error {
         };
 
         let subject_string = if let Some(subject_value) = &self.description.subject {
-            format!(": {}", subject_value)
+            format!(
+                ": {}",
+                normalize_whitespace_chars_for_display(subject_value)
+            )
         } else {
             String::from("")
         };

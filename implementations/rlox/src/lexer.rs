@@ -3,12 +3,24 @@ use std::fmt;
 use crate::errors;
 use crate::scanner;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum WhitespaceKind {
     Space,
     Tab,
     Return,
     Newline,
+}
+
+impl fmt::Debug for WhitespaceKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = match self {
+            WhitespaceKind::Space => "\\s",
+            WhitespaceKind::Tab => "\\t",
+            WhitespaceKind::Return => "\\r",
+            WhitespaceKind::Newline => "\\n",
+        };
+        write!(f, "{}", value)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,6 +48,8 @@ pub enum Token {
     EqualEqual,
     GreaterEqual,
     LessEqual,
+    // --- Literals ---
+    Number(f64),
     // --- Meta ---
     Comment(String),
     Whitespace(WhitespaceKind),
@@ -68,6 +82,8 @@ impl fmt::Display for Token {
             Token::EqualEqual => String::from("=="),
             Token::GreaterEqual => String::from(">="),
             Token::LessEqual => String::from("<="),
+            // --- Literals ---
+            Token::Number(number) => format!("number \"{}\"", number),
             // --- Meta ---
             Token::Comment(comment) => format!("comment \"{}\"", comment),
             Token::Whitespace(whitespace) => format!("Whitespace {:?}", whitespace),
@@ -87,7 +103,7 @@ impl fmt::Display for SourceToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // The EOF token is artificially inserted by the lexer when the scanner runs out of tokens.
         // When the scanner runs out of tokens, it doesn't increment its internal cursor, so its
-        // cursor would have a length of 0. Checking for EOF rather than the pathololgical case of
+        // cursor would have a length of 0. Checking for EOF rather than the pathological case of
         // a zero length cursor is more explicit. A zero length cursor could represent either a
         // scanner that has exhausted the symbol sequence, or a scanner that simply hasn't begun
         // scanning anything with it's current cursor.
@@ -107,9 +123,27 @@ impl fmt::Display for SourceToken {
                 self.location.end.column - 1
             )
         };
-        write!(f, "\"{}\"::{}", self.token, location_string)
+        write!(f, "({})::{}", self.token, location_string)
     }
 }
+
+// -----| Utilities |-----
+
+// This is totally ridiculous. Is there really not a better way of doing this?
+// fn grapheme_to_char(symbol: &str) -> char {
+//     symbol.to_string().chars().collect::<Vec<char>>()[0]
+// }
+
+// This seems a bit wild, but I think it might actually be better than calling `grapheme_to_char()`
+// and then `is_ascii_digit()`. Both ways are bad though, need to keep looking for a better way.
+fn is_digit(symbol: &str) -> bool {
+    match symbol {
+        "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => true,
+        _ => false,
+    }
+}
+
+// -----| Lexer |-----
 
 /// The object through which the source is consumed and transformed into a token sequence
 pub struct Lexer {
@@ -155,28 +189,28 @@ impl Lexer {
                 ":" => Ok(Token::Colon),
                 // --- Potential Pairs ---
                 "!" => {
-                    if self.scanner.match_scan_next("=") {
+                    if self.scanner.scan_next_if_match("=") {
                         Ok(Token::BangEqual)
                     } else {
                         Ok(Token::Bang)
                     }
                 }
                 "=" => {
-                    if self.scanner.match_scan_next("=") {
+                    if self.scanner.scan_next_if_match("=") {
                         Ok(Token::EqualEqual)
                     } else {
                         Ok(Token::Equal)
                     }
                 }
                 "<" => {
-                    if self.scanner.match_scan_next("=") {
+                    if self.scanner.scan_next_if_match("=") {
                         Ok(Token::LessEqual)
                     } else {
                         Ok(Token::Less)
                     }
                 }
                 ">" => {
-                    if self.scanner.match_scan_next("=") {
+                    if self.scanner.scan_next_if_match("=") {
                         Ok(Token::GreaterEqual)
                     } else {
                         Ok(Token::Greater)
@@ -185,7 +219,7 @@ impl Lexer {
                 // --- Comment/Division ---
                 // It would truly be better to keep these separate and just use `#` for comments.
                 "/" => {
-                    if self.scanner.match_scan_next("/") {
+                    if self.scanner.scan_next_if_match("/") {
                         let mut content = String::from("//");
                         while let Some(symbol) = self.scanner.peek_next() {
                             if symbol == "\n" {
@@ -204,6 +238,7 @@ impl Lexer {
                 "\r" => Ok(Token::Whitespace(WhitespaceKind::Return)),
                 "\t" => Ok(Token::Whitespace(WhitespaceKind::Tab)),
                 "\n" => Ok(Token::Whitespace(WhitespaceKind::Newline)),
+                digit if is_digit(digit) => self.consume_number(), // better name
                 _ => Err(errors::Error {
                     kind: errors::ErrorKind::Scanning,
                     description: errors::ErrorDescription {
@@ -225,5 +260,60 @@ impl Lexer {
             return ret;
         }
         None
+    }
+    fn consume_number(&mut self) -> Result<Token, errors::Error> {
+        self.consume_digits();
+        if let Some(symbol) = self.scanner.peek_next() {
+            if symbol == "." {
+                if let Some(symbol) = self.scanner.peek(1) {
+                    if is_digit(&symbol) {
+                        // Consume the decimal point, then the rest of the number.
+                        self.scanner.scan_next();
+                        self.consume_digits();
+                    } else {
+                        // Consume the next two symbols to make the subject/location accurate for
+                        // the error message.
+                        self.scanner.scan_next();
+                        self.scanner.scan_next();
+                        return Err(errors::Error {
+                            kind: errors::ErrorKind::Scanning,
+                            description: errors::ErrorDescription {
+                                subject: Some(self.scanner.get_selection()),
+                                location: Some(self.scanner.get_cursor()),
+                                description: String::from(
+                                    "Non-digit encountered after decimal point",
+                                ),
+                            },
+                        });
+                    }
+                } else {
+                    // Consume the next symbol to make the subject/location accurate for the error
+                    // message.
+                    self.scanner.scan_next();
+                    return Err(errors::Error {
+                        kind: errors::ErrorKind::Scanning,
+                        description: errors::ErrorDescription {
+                            subject: Some(self.scanner.get_selection()),
+                            location: Some(self.scanner.get_cursor()),
+                            description: String::from("Ran out of symbols after decimal point"),
+                        },
+                    });
+                }
+            }
+        }
+        let selection = self.scanner.get_selection();
+        let value = selection
+            .parse::<f64>()
+            .expect(&format!("Internal errors parsing float: {}", selection));
+        Ok(Token::Number(value))
+    }
+    fn consume_digits(&mut self) {
+        while let Some(symbol) = self.scanner.peek_next() {
+            if is_digit(&symbol) {
+                self.scanner.scan_next();
+            } else {
+                break;
+            }
+        }
     }
 }

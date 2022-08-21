@@ -1,5 +1,6 @@
 use unicode_segmentation::UnicodeSegmentation;
 
+// TODO: put this in a config somewhere?
 const USE_EXTENDED_UNICODE: bool = true;
 
 /// UTF-8 Graphemes
@@ -23,6 +24,9 @@ impl Scanner {
     pub fn get_cursor(&self) -> SourceSpan {
         return self.cursor;
     }
+    pub fn get_selection(&self) -> String {
+        self.symbols[self.cursor.begin.index..self.cursor.end.index].join("")
+    }
     pub fn snap_cursor_to_head(&mut self) {
         self.cursor.snap_to_head();
     }
@@ -35,7 +39,7 @@ impl Scanner {
         None
     }
     // Consumes current symbol if it matches a target, and advances the cursor
-    pub fn match_scan_next(&mut self, target: &str) -> bool {
+    pub fn scan_next_if_match(&mut self, target: &str) -> bool {
         if let Some(curr) = self.symbols.get(self.cursor.head()) {
             if curr == target {
                 self.cursor.extend(curr);
@@ -45,7 +49,10 @@ impl Scanner {
         false
     }
     pub fn peek_next(&mut self) -> Option<Symbol> {
-        if let Some(curr) = self.symbols.get(self.cursor.head()) {
+        self.peek(0)
+    }
+    pub fn peek(&mut self, steps: usize) -> Option<Symbol> {
+        if let Some(curr) = self.symbols.get(self.cursor.head() + steps) {
             return Some(String::from(curr));
         }
         None
