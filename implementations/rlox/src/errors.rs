@@ -70,6 +70,34 @@ impl fmt::Display for Error {
     }
 }
 
+pub struct ErrorLog {
+    pub errors: Vec<Error>,
+}
+
+impl ErrorLog {
+    pub fn new() -> Self {
+        ErrorLog { errors: Vec::new() }
+    }
+    pub fn push(&mut self, error: Error) {
+        self.errors.push(error);
+    }
+    pub fn len(&self) -> usize {
+        self.errors.len()
+    }
+}
+
+pub trait ErrorLoggable {
+    fn error_log(&self) -> &ErrorLog;
+}
+
+// -----| Utilities |-----
+
+pub fn print_error_log(log: &ErrorLog) {
+    for error in log.errors.iter() {
+        println!("{}", error.to_string());
+    }
+}
+
 pub fn exit_with_code(code: exitcode::ExitCode) {
     process::exit(code);
 }

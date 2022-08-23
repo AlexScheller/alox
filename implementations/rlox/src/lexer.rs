@@ -226,12 +226,16 @@ fn match_keyword(symbol: &str) -> Option<Token> {
 /// The object through which the source is consumed and transformed into a token sequence
 pub struct Lexer {
     scanner: scanner::Scanner,
+    error_log: errors::ErrorLog,
 }
 
 impl Lexer {
     // Constructors
     pub fn new(scanner: scanner::Scanner) -> Self {
-        Lexer { scanner }
+        Lexer {
+            scanner,
+            error_log: errors::ErrorLog::new(),
+        }
     }
     // Responsibilities
     pub fn generate_tokens(&mut self) -> Vec<SourceToken> {
@@ -239,7 +243,7 @@ impl Lexer {
         while let Some(result) = self.scan_next_token() {
             match result {
                 Ok(token) => ret.push(token),
-                Err(error) => panic!("{}", error), // TODO: Use ErrorLog or smth
+                Err(error) => self.error_log.push(error),
             }
         }
         // self.scanner.snap_cursor_to_head();
@@ -440,5 +444,11 @@ impl Lexer {
         } else {
             Ok(Token::Identifier(value))
         }
+    }
+}
+
+impl errors::ErrorLoggable for Lexer {
+    fn error_log(&self) -> &errors::ErrorLog {
+        &self.error_log
     }
 }

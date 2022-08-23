@@ -3,6 +3,8 @@ use std::{
     io::{self, Write},
 };
 
+use crate::errors::ErrorLoggable;
+
 mod errors;
 mod lexer;
 mod scanner;
@@ -43,8 +45,15 @@ fn interpret_prompt() {
 fn interpret(source: String) {
     let scanner = scanner::Scanner::new(String::from(source));
     let mut lexer = lexer::Lexer::new(scanner);
-    let tokens = lexer.generate_tokens();
-    for token in tokens {
-        println!("{}", token);
+    let _tokens = lexer.generate_tokens();
+    if lexer.error_log().len() > 0 {
+        errors::print_error_log(lexer.error_log());
     }
+    //     let tokens_without_whitespace = tokens
+    //         .into_iter()
+    //         .filter(|source_token| match source_token.token {
+    //             lexer::Token::Whitespace(any) => false,
+    //             _ => true,
+    //         })
+    //         .collect();
 }
