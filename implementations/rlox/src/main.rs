@@ -6,8 +6,10 @@ use std::{
 use crate::errors::ErrorLoggable;
 
 mod errors;
+mod lexemes;
 mod lexer;
-mod scanner;
+mod parser;
+mod source;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -43,8 +45,8 @@ fn interpret_prompt() {
 }
 
 fn interpret(source: String) {
-    let scanner = scanner::Scanner::new(String::from(source));
-    let mut lexer = lexer::Lexer::new(scanner);
+    let source = String::from(source);
+    let mut lexer = lexer::Lexer::new(source);
     let _tokens = lexer.generate_tokens();
     if lexer.error_log().len() > 0 {
         errors::print_error_log(lexer.error_log());

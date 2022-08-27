@@ -1,171 +1,10 @@
-use std::fmt;
+use unicode_segmentation::UnicodeSegmentation;
 
-use crate::errors;
-use crate::scanner;
+use crate::lexemes::{Token, WhitespaceKind};
+use crate::{errors, source};
 
-#[derive(PartialEq)]
-pub enum WhitespaceKind {
-    Space,
-    Tab,
-    Return,
-    Newline,
-}
-
-impl fmt::Debug for WhitespaceKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            WhitespaceKind::Space => "\\s",
-            WhitespaceKind::Tab => "\\t",
-            WhitespaceKind::Return => "\\r",
-            WhitespaceKind::Newline => "\\n",
-        };
-        write!(f, "{}", value)
-    }
-}
-
-pub type Identifier = String;
-
-#[derive(Debug, PartialEq)]
-pub enum Token {
-    // --- Singles ---
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
-    Comma,
-    Dot,
-    Minus,
-    Plus,
-    Semicolon,
-    Slash,
-    Star,
-    QuestionMark,
-    Colon,
-    Bang,
-    Equal,
-    Greater,
-    Less,
-    // --- Pairs ---
-    BangEqual,
-    EqualEqual,
-    GreaterEqual,
-    LessEqual,
-    // --- Literals ---
-    Identifier(Identifier), // Note if this ever changes then other representations of identifiers will need to also.
-    String(String),
-    Number(f64),
-    // --- Keywords ---
-    And,
-    Class,
-    Else,
-    False,
-    Fun,
-    For,
-    If,
-    Nil,
-    Or,
-    Print,
-    Return,
-    Super,
-    This,
-    True,
-    Var,
-    While,
-    // --- Meta ---
-    Comment(String),
-    Whitespace(WhitespaceKind),
-    Eof,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
-            // --- Singles ---
-            Token::LeftParen => String::from("("),
-            Token::RightParen => String::from(")"),
-            Token::LeftBrace => String::from("{"),
-            Token::RightBrace => String::from("}"),
-            Token::Comma => String::from(","),
-            Token::Dot => String::from("."),
-            Token::Minus => String::from("-"),
-            Token::Plus => String::from("+"),
-            Token::Semicolon => String::from(";"),
-            Token::Slash => String::from("/"),
-            Token::Star => String::from("*"),
-            Token::QuestionMark => String::from("?"),
-            Token::Colon => String::from(":"),
-            Token::Bang => String::from("!"),
-            Token::Equal => String::from("="),
-            Token::Greater => String::from(">"),
-            Token::Less => String::from("<"),
-            // --- Pairs ---
-            Token::BangEqual => String::from("!="),
-            Token::EqualEqual => String::from("=="),
-            Token::GreaterEqual => String::from(">="),
-            Token::LessEqual => String::from("<="),
-            // --- Literals ---
-            Token::Identifier(identifier) => format!("identifier \"{}\"", identifier),
-            Token::String(string) => format!("string \"{}\"", string),
-            Token::Number(number) => format!("number \"{}\"", number),
-            // --- Keywords ---
-            Token::And => String::from("and"),
-            Token::Class => String::from("class"),
-            Token::Else => String::from("else"),
-            Token::False => String::from("false"),
-            Token::Fun => String::from("fun"),
-            Token::For => String::from("for"),
-            Token::If => String::from("if"),
-            Token::Nil => String::from("nil"),
-            Token::Or => String::from("or"),
-            Token::Print => String::from("print"),
-            Token::Return => String::from("return"),
-            Token::Super => String::from("super"),
-            Token::This => String::from("this"),
-            Token::True => String::from("true"),
-            Token::Var => String::from("var"),
-            Token::While => String::from("while"),
-            // --- Meta ---
-            Token::Comment(comment) => format!("comment \"{}\"", comment),
-            Token::Whitespace(whitespace) => format!("Whitespace {:?}", whitespace),
-            Token::Eof => String::from("Eof"),
-        };
-        write!(f, "{}", value)
-    }
-}
-
-#[derive(Debug)]
-pub struct SourceToken {
-    pub token: Token,
-    pub location: scanner::SourceSpan,
-}
-
-impl fmt::Display for SourceToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // The EOF token is artificially inserted by the lexer when the scanner runs out of tokens.
-        // When the scanner runs out of tokens, it doesn't increment its internal cursor, so its
-        // cursor would have a length of 0. Checking for EOF rather than the pathological case of
-        // a zero length cursor is more explicit. A zero length cursor could represent either a
-        // scanner that has exhausted the symbol sequence, or a scanner that simply hasn't begun
-        // scanning anything with it's current cursor.
-        let location_string = if self.location.length() == 1 || self.token == Token::Eof {
-            format!(
-                "[{}:{}]",
-                self.location.begin.line, self.location.begin.column
-            )
-        } else {
-            format!(
-                "[{}:{} -> {}:{}]",
-                self.location.begin.line,
-                self.location.begin.column,
-                self.location.end.line,
-                // "end" is actually one past the end of a sequence in terms of how we might think
-                // of it when looking at it in a text editor.
-                self.location.end.column - 1
-            )
-        };
-        write!(f, "({})::{}", self.token, location_string)
-    }
-}
+// TODO: put this in a config somewhere?
+const USE_EXTENDED_UNICODE: bool = true;
 
 // -----| Utilities |-----
 
@@ -221,24 +60,82 @@ fn match_keyword(symbol: &str) -> Option<Token> {
     }
 }
 
+// -----| Source Scanner |-----
+
+/// UTF-8 Graphemes
+type Symbol = String;
+
+struct Scanner {
+    symbols: Vec<Symbol>,
+    cursor: source::SourceSpan,
+}
+
+impl Scanner {
+    pub fn new(source: String) -> Self {
+        Scanner {
+            symbols: source
+                .graphemes(USE_EXTENDED_UNICODE)
+                .map(|grapheme| String::from(grapheme))
+                .collect(),
+            cursor: source::SourceSpan::new(),
+        }
+    }
+    pub fn get_cursor(&self) -> source::SourceSpan {
+        return self.cursor;
+    }
+    pub fn get_selection(&self) -> String {
+        self.symbols[self.cursor.begin.index..self.cursor.end.index].join("")
+    }
+    pub fn snap_cursor_to_head(&mut self) {
+        self.cursor.snap_to_head();
+    }
+    // Consumes current symbol (if any) and advances the cursor
+    pub fn scan_next(&mut self) -> Option<Symbol> {
+        if let Some(curr) = self.symbols.get(self.cursor.head()) {
+            self.cursor.extend(curr);
+            return Some(String::from(curr));
+        }
+        None
+    }
+    // Consumes current symbol if it matches a target, and advances the cursor
+    pub fn scan_next_if_match(&mut self, target: &str) -> bool {
+        if let Some(curr) = self.symbols.get(self.cursor.head()) {
+            if curr == target {
+                self.cursor.extend(curr);
+                return true;
+            }
+        }
+        false
+    }
+    pub fn peek_next(&mut self) -> Option<Symbol> {
+        self.peek(0)
+    }
+    pub fn peek(&mut self, steps: usize) -> Option<Symbol> {
+        if let Some(curr) = self.symbols.get(self.cursor.head() + steps) {
+            return Some(String::from(curr));
+        }
+        None
+    }
+}
+
 // -----| Lexer |-----
 
 /// The object through which the source is consumed and transformed into a token sequence
 pub struct Lexer {
-    scanner: scanner::Scanner,
+    scanner: Scanner,
     error_log: errors::ErrorLog,
 }
 
 impl Lexer {
     // Constructors
-    pub fn new(scanner: scanner::Scanner) -> Self {
+    pub fn new(source: String) -> Self {
         Lexer {
-            scanner,
+            scanner: Scanner::new(source),
             error_log: errors::ErrorLog::new(),
         }
     }
     // Responsibilities
-    pub fn generate_tokens(&mut self) -> Vec<SourceToken> {
+    pub fn generate_tokens(&mut self) -> Vec<source::SourceToken> {
         let mut ret = Vec::new();
         while let Some(result) = self.scan_next_token() {
             match result {
@@ -247,13 +144,13 @@ impl Lexer {
             }
         }
         // self.scanner.snap_cursor_to_head();
-        ret.push(SourceToken {
+        ret.push(source::SourceToken {
             token: Token::Eof,
             location: self.scanner.get_cursor(),
         });
         ret
     }
-    pub fn scan_next_token(&mut self) -> Option<Result<SourceToken, errors::Error>> {
+    pub fn scan_next_token(&mut self) -> Option<Result<source::SourceToken, errors::Error>> {
         if let Some(symbol) = self.scanner.scan_next() {
             let token_result = match symbol.as_ref() {
                 // --- Singles ---
@@ -334,7 +231,7 @@ impl Lexer {
                 }),
             };
             let ret = match token_result {
-                Ok(token) => Some(Ok(SourceToken {
+                Ok(token) => Some(Ok(source::SourceToken {
                     token,
                     location: self.scanner.get_cursor(),
                 })),

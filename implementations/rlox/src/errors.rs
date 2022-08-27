@@ -2,14 +2,14 @@ use std::{fmt, process};
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::scanner;
+use crate::source;
 
 // TODO: put this in a config somewhere?
 const USE_EXTENDED_UNICODE: bool = true;
 
 pub struct ErrorDescription {
     pub subject: Option<String>,
-    pub location: Option<scanner::SourceSpan>,
+    pub location: Option<source::SourceSpan>,
     pub description: String,
 }
 
