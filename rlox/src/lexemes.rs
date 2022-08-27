@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum WhitespaceKind {
     Space,
     Tab,
@@ -22,7 +22,7 @@ impl fmt::Debug for WhitespaceKind {
 
 pub type Identifier = String;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     // --- Singles ---
     LeftParen,

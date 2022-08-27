@@ -10,6 +10,7 @@ mod lexemes;
 mod lexer;
 mod parser;
 mod source;
+mod utilities;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -46,16 +47,20 @@ fn interpret_prompt() {
 
 fn interpret(source: String) {
     let source = String::from(source);
+
     let mut lexer = lexer::Lexer::new(source);
-    let _tokens = lexer.generate_tokens();
+    let tokens = lexer.generate_tokens();
     if lexer.error_log().len() > 0 {
         errors::print_error_log(lexer.error_log());
     }
-    //     let tokens_without_whitespace = tokens
-    //         .into_iter()
-    //         .filter(|source_token| match source_token.token {
-    //             lexer::Token::Whitespace(any) => false,
-    //             _ => true,
-    //         })
-    //         .collect();
+
+    let mut parser = parser::Parser::new(tokens);
+    let expression = parser.expression();
+    match expression {
+        Ok(expr) => println!("{}", expr),
+        Err(err) => {
+            println!("{}", err);
+            errors::exit_with_code(exitcode::DATAERR);
+        }
+    }
 }

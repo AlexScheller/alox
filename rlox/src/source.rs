@@ -69,7 +69,7 @@ impl SourceSpan {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceToken {
     pub token: Token,
     pub location: SourceSpan,
