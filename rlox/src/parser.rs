@@ -76,6 +76,47 @@ impl Scanner {
     }
 }
 
+// -----| Language Grammer |-----
+//
+// program  -> declaration* EOF ;
+
+// -----| Declaration Grammar |-----
+//
+// declaration  -> varDecl | statement ;
+
+// -----| Statements |-----
+
+// ----- Grammar -----
+//
+// statement    -> epxrStmt | print Stmt ;
+// exprStmt     -> expression ";" ;
+// printStmt    -> "print" expression ";" ;
+
+pub struct ExprStmt {
+    pub expression: Expr,
+}
+
+// TODO: Get rid of this as soon as you have a standard library.
+pub struct PrintStmt {
+    pub expression: Expr,
+}
+
+pub enum Stmt {
+    Expression(ExprStmt),
+    Print(PrintStmt),
+}
+
+const STATEMENT_BEGINNING_TOKENS: &[Token] = &[
+    Token::Class,
+    Token::For,
+    Token::Fun,
+    Token::If,
+    Token::Print,
+    Token::Return,
+    Token::Var,
+    Token::While,
+];
+
 // -----| Expressions |-----
 
 #[derive(Debug, PartialEq)]
@@ -152,7 +193,7 @@ impl fmt::Display for Expr {
     }
 }
 
-// -----| Token to Expression Sets |-----
+// ----- Token to Expression Sets -----
 
 const EQUALITY_TOKENS: &[lexemes::Token] = &[lexemes::Token::BangEqual, lexemes::Token::EqualEqual];
 
@@ -173,7 +214,7 @@ const TERNARY_TEST_TOKEN: lexemes::Token = lexemes::Token::QuestionMark;
 
 const TERNARY_BRANCH_TOKEN: lexemes::Token = lexemes::Token::Colon;
 
-// -----| Grammar |-----
+// ----- Grammar -----
 //
 // In increasing order of precedence
 //
@@ -214,9 +255,18 @@ impl Parser {
             error_log: errors::ErrorLog::new(),
         }
     }
+    pub fn parse(&mut self) -> Vec<Stmt> {
+        let mut statements: Vec<Stmt> = Vec::new();
+        while let Some(parse_result) = self.statement() {
+            match parse_result {
+                Ok(statement) => statements.push(statement),
+                Err(error) => self.error_log.push(error),
+            }
+        }
+        statements
+    }
     // Expressions
-    // TODO: Make this private once you have a statement driver.
-    pub fn expression(&mut self) -> Result<Expr, errors::Error> {
+    fn expression(&mut self) -> Result<Expr, errors::Error> {
         self.ternary()
     }
     fn ternary(&mut self) -> Result<Expr, errors::Error> {
@@ -357,5 +407,11 @@ impl Parser {
                 },
             })
         }
+    }
+}
+
+impl errors::ErrorLoggable for Parser {
+    fn error_log(&self) -> &errors::ErrorLog {
+        &self.error_log
     }
 }

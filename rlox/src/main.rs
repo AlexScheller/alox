@@ -6,6 +6,7 @@ use std::{
 use crate::errors::ErrorLoggable;
 
 mod errors;
+mod interpreter;
 mod lexemes;
 mod lexer;
 mod parser;
@@ -55,12 +56,14 @@ fn interpret(source: String) {
     }
 
     let mut parser = parser::Parser::new(tokens);
-    let expression = parser.expression();
-    match expression {
-        Ok(expr) => println!("{}", expr),
-        Err(err) => {
-            println!("{}", err);
-            errors::exit_with_code(exitcode::DATAERR);
-        }
+    let statements = parser.parse();
+    if parser.error_log().len() > 0 {
+        errors::print_error_log(parser.error_log());
+        errors::exit_with_code(exitcode::DATAERR)
+    }
+
+    let interpreter = interpreter::Interpreter::new();
+    for statement in statements {
+        interpreter.interpret(statement);
     }
 }
