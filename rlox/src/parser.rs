@@ -84,6 +84,17 @@ impl Scanner {
         }
         panic!("Attempted to read previous token while at index 0");
     }
+    pub fn synchronize_to_statement_boundary(&mut self) {
+        // TODO: Is it an issues that this doesn't somehow error when it reaches EOF without
+        // encountering a statment boundary?
+        while let Some(source_token) = self.scan_next() {
+            if source_token.token == lexemes::Token::Semicolon
+                || STATEMENT_BEGINNING_TOKENS.contains(&source_token.token)
+            {
+                break;
+            };
+        }
+    }
 }
 
 // -----| Language Grammer |-----
@@ -93,6 +104,8 @@ impl Scanner {
 // -----| Declaration Grammar |-----
 //
 // declaration  -> varDecl | statement ;
+// I differ from the book here. I disallow uninitialized variables.
+// varDecl      -> "var" IDENTIFIER "=" expression ";" ;
 
 // -----| Statements |-----
 
@@ -111,9 +124,17 @@ pub struct PrintStmt {
     pub expression: Expr,
 }
 
+pub struct VarStmt {
+    pub name: String,
+    // I differ from the book here by disallowing uninitialized variables. Otherwise this would need
+    // to be an Option<Expr>.
+    pub initializer: Expr,
+}
+
 pub enum Stmt {
     Expression(ExprStmt),
     Print(PrintStmt),
+    Var(VarStmt), // Is this a declaration or a statement?
 }
 
 const STATEMENT_BEGINNING_TOKENS: &[Token] = &[
@@ -266,6 +287,9 @@ impl Parser {
         }
     }
     pub fn parse(&mut self) -> Vec<Stmt> {
+        // TODO: Maybe find a more accurate name for what this returns. It's kind of weird that we
+        // sometimes treat declarations like they are statements, and other times like they are
+        // something else entirely.
         let mut statements: Vec<Stmt> = Vec::new();
         while let Some(parse_result) = self.parse_next() {
             match parse_result {
@@ -277,14 +301,56 @@ impl Parser {
     }
     fn parse_next(&mut self) -> Option<Result<Stmt, errors::Error>> {
         if let Some(_) = self.scanner.peek_next() {
-            return Some(self.statement());
+            return Some(self.declaration());
         }
         None
     }
-    // Statements
+    // --- Declarations ---
+    fn declaration(&mut self) -> Result<Stmt, errors::Error> {
+        let res = if self.scanner.matches_then_scan_next(lexemes::Token::Var) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+        match res {
+            Ok(stmt) => Ok(stmt),
+            Err(error) => {
+                self.scanner.synchronize_to_statement_boundary();
+                Err(error)
+            }
+        }
+    }
+    fn var_declaration(&mut self) -> Result<Stmt, errors::Error> {
+        // TODO: Find a way to either make this a constant, or to pass just the kind of an enum, and
+        // not an instance of it.
+        let IDENTIFIER_EXEMPLAR = lexemes::Token::Identifier(String::from("example"));
+        let next = self.scanner.expect_and_scan_next(IDENTIFIER_EXEMPLAR)?;
+        // Quite the if-let/deconstruction here...
+        if let SourceToken {
+            token: lexemes::Token::Identifier(name),
+            ..
+        } = next
+        {
+            // This commented out version allows uninitialized variables.
+            // let mut initializer = None;
+            // let source_token = self.advance_token_index()?;
+            // if self.match_then_consume(source_token.token, scanner::Token::Equal) {
+            //     initializer = Some(self.expression()?);
+            // }
+            // self.consume_next_token(scanner::Token::Semicolon)?;
+            // return Ok(Stmt::Var(VarStmt { name, initializer }));
+
+            // I differ from the book here, by disallowing uninitialized variables.
+            self.scanner.expect_and_scan_next(lexemes::Token::Equal)?;
+            let initializer = self.expression()?;
+            self.scanner
+                .expect_and_scan_next(lexemes::Token::Semicolon)?;
+            return Ok(Stmt::Var(VarStmt { name, initializer }));
+        };
+        panic!("`consume_next_token` has to be broken for this to be reachable");
+    }
+    // --- Statements ---
     fn statement(&mut self) -> Result<Stmt, errors::Error> {
-        // One might notice that we haven't checked for the existence of a token. Theoretically that
-        // was already done by the caller.
         if self.scanner.matches_then_scan_next(lexemes::Token::Print) {
             return self.print_statement();
         }
@@ -302,7 +368,7 @@ impl Parser {
             .expect_and_scan_next(lexemes::Token::Semicolon)?;
         Ok(Stmt::Expression(ExprStmt { expression }))
     }
-    // Expressions
+    // --- Expressions ---
     fn expression(&mut self) -> Result<Expr, errors::Error> {
         self.ternary()
     }
