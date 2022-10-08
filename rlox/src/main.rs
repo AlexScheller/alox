@@ -62,7 +62,7 @@ fn interpret(source: String) {
         errors::exit_with_code(exitcode::DATAERR)
     }
 
-    let interpreter = interpreter::Interpreter::new();
+    let mut interpreter = interpreter::Interpreter::new();
     for statement in statements {
         interpreter.interpret(statement);
     }

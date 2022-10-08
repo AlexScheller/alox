@@ -14,7 +14,7 @@ impl Interpreter {
             error_log: errors::ErrorLog::new(),
         }
     }
-    pub fn interpret(&self, statement: Stmt) {
+    pub fn interpret(&mut self, statement: Stmt) {
         match statement {
             Stmt::Expression(stmt) => match self.expression(stmt.expression) {
                 Ok(_) => {}

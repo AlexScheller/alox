@@ -33,12 +33,22 @@ impl Scanner {
             _ => Some(token.clone()),
         }
     }
+    // It seems strange to me that scan_next doesn't error when it runs out of characters.
     pub fn scan_next(&mut self) -> Option<SourceToken> {
         if let Some(token) = self.symbols.get(self.index) {
             self.index += 1;
             return Some(token.clone());
         }
         None
+    }
+    pub fn matches_then_scan_next(&mut self, target: Token) -> bool {
+        if let Some(next) = self.peek_next() {
+            if next.token == target {
+                self.scan_next();
+                return true;
+            }
+        }
+        false
     }
     pub fn expect_and_scan_next(&mut self, expected: Token) -> Result<SourceToken, errors::Error> {
         if let Some(source_token) = self.peek_next() {
@@ -257,13 +267,40 @@ impl Parser {
     }
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut statements: Vec<Stmt> = Vec::new();
-        while let Some(parse_result) = self.statement() {
+        while let Some(parse_result) = self.parse_next() {
             match parse_result {
                 Ok(statement) => statements.push(statement),
                 Err(error) => self.error_log.push(error),
             }
         }
         statements
+    }
+    fn parse_next(&mut self) -> Option<Result<Stmt, errors::Error>> {
+        if let Some(_) = self.scanner.peek_next() {
+            return Some(self.statement());
+        }
+        None
+    }
+    // Statements
+    fn statement(&mut self) -> Result<Stmt, errors::Error> {
+        // One might notice that we haven't checked for the existence of a token. Theoretically that
+        // was already done by the caller.
+        if self.scanner.matches_then_scan_next(lexemes::Token::Print) {
+            return self.print_statement();
+        }
+        self.expression_statement()
+    }
+    fn print_statement(&mut self) -> Result<Stmt, errors::Error> {
+        let expression = self.expression()?;
+        self.scanner
+            .expect_and_scan_next(lexemes::Token::Semicolon)?;
+        Ok(Stmt::Print(PrintStmt { expression }))
+    }
+    fn expression_statement(&mut self) -> Result<Stmt, errors::Error> {
+        let expression = self.expression()?;
+        self.scanner
+            .expect_and_scan_next(lexemes::Token::Semicolon)?;
+        Ok(Stmt::Expression(ExprStmt { expression }))
     }
     // Expressions
     fn expression(&mut self) -> Result<Expr, errors::Error> {
