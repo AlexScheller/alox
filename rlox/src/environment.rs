@@ -28,15 +28,11 @@ impl Environment {
                 },
             });
         }
-        println!("Inserting new value for name: {}", &name);
         self.values.insert(name, value.clone());
-        println!("{:?}", self.values);
         Ok(value)
     }
     pub fn get(&mut self, name: String) -> Result<Value, errors::Error> {
-        println!("{:?}", self.values);
         if let Some(value) = self.values.get(&name) {
-            println!("Found a value for name: {}", &name);
             return Ok(value.clone());
         }
         Err(errors::Error {

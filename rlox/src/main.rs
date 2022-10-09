@@ -29,10 +29,12 @@ fn main() {
 fn interpret_file(file_name: &str) {
     let contents =
         fs::read_to_string(file_name).expect(&format!("Failed to read file: {}", file_name));
-    interpret(contents)
+    let mut interpreter = interpreter::Interpreter::new();
+    interpret(contents, &mut interpreter, true);
 }
 
 fn interpret_prompt() {
+    let mut interpreter = interpreter::Interpreter::new();
     loop {
         let mut line = String::new();
         print!("> ");
@@ -43,11 +45,15 @@ fn interpret_prompt() {
         if line == "\n" {
             break;
         }
-        interpret(line);
+        interpret(line, &mut interpreter, false);
     }
 }
 
-fn interpret(source: String) {
+fn interpret(
+    source: String,
+    interpreter: &mut interpreter::Interpreter,
+    should_exit_on_error: bool,
+) {
     let source = String::from(source);
 
     let mut lexer = lexer::Lexer::new(source);
@@ -60,15 +66,18 @@ fn interpret(source: String) {
     let statements = parser.parse();
     if parser.error_log().len() > 0 {
         errors::print_error_log(parser.error_log());
-        errors::exit_with_code(exitcode::DATAERR)
+        if should_exit_on_error {
+            errors::exit_with_code(exitcode::DATAERR)
+        }
     }
 
-    let mut interpreter = interpreter::Interpreter::new();
     for statement in statements {
         interpreter.interpret(statement);
         if interpreter.error_log().len() > 0 {
             errors::print_error_log(interpreter.error_log());
-            errors::exit_with_code(exitcode::DATAERR)
+            if should_exit_on_error {
+                errors::exit_with_code(exitcode::DATAERR)
+            }
         }
     }
 }
