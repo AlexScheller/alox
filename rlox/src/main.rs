@@ -5,6 +5,7 @@ use std::{
 
 use crate::errors::ErrorLoggable;
 
+mod environment;
 mod errors;
 mod interpreter;
 mod lexemes;
@@ -65,5 +66,9 @@ fn interpret(source: String) {
     let mut interpreter = interpreter::Interpreter::new();
     for statement in statements {
         interpreter.interpret(statement);
+        if interpreter.error_log().len() > 0 {
+            errors::print_error_log(interpreter.error_log());
+            errors::exit_with_code(exitcode::DATAERR)
+        }
     }
 }

@@ -150,8 +150,9 @@ const STATEMENT_BEGINNING_TOKENS: &[Token] = &[
 
 // -----| Expressions |-----
 
-#[derive(Debug, PartialEq)]
-pub enum LiteralKind {
+// TODO: Find out if implementing copy is possible. Probably not because of the String.
+#[derive(Debug, PartialEq, Clone)]
+pub enum Value {
     Number(f64),
     String(String),
     Boolean(bool),
@@ -185,7 +186,8 @@ pub enum Expr {
     Ternary(TernaryExpr),
     Grouping(Box<Expr>),
     Unary(UnaryExpr),
-    Literal(LiteralKind),
+    Literal(Value),
+    Variable(String),
 }
 
 impl fmt::Display for Expr {
@@ -211,13 +213,16 @@ impl fmt::Display for Expr {
                 format!("(group {})", format!("{}", &expr))
             }
             Expr::Literal(kind) => match kind {
-                LiteralKind::Number(number) => number.to_string(),
-                LiteralKind::String(string) => string.to_string(),
-                LiteralKind::Boolean(boolean) => boolean.to_string(),
-                LiteralKind::Nil => String::from("nil"),
+                Value::Number(number) => number.to_string(),
+                Value::String(string) => string.to_string(),
+                Value::Boolean(boolean) => boolean.to_string(),
+                Value::Nil => String::from("nil"),
             },
             Expr::Unary(expr) => {
                 format!("({} {})", expr.operator.token, format!("{}", &expr.right))
+            }
+            Expr::Variable(name) => {
+                format!("(variable {})", name)
             }
         };
         write!(f, "{}", value)
@@ -478,16 +483,17 @@ impl Parser {
         if let Some(source_token) = self.scanner.peek_next() {
             self.scanner.scan_next();
             match source_token.token {
-                Token::False => Ok(Expr::Literal(LiteralKind::Boolean(false))),
-                Token::True => Ok(Expr::Literal(LiteralKind::Boolean(true))),
-                Token::Nil => Ok(Expr::Literal(LiteralKind::Nil)),
-                Token::Number(value) => Ok(Expr::Literal(LiteralKind::Number(value))),
-                Token::String(value) => Ok(Expr::Literal(LiteralKind::String(value))),
+                Token::False => Ok(Expr::Literal(Value::Boolean(false))),
+                Token::True => Ok(Expr::Literal(Value::Boolean(true))),
+                Token::Nil => Ok(Expr::Literal(Value::Nil)),
+                Token::Number(value) => Ok(Expr::Literal(Value::Number(value))),
+                Token::String(value) => Ok(Expr::Literal(Value::String(value))),
                 Token::LeftParen => {
                     let expr = self.expression()?;
                     self.scanner.expect_and_scan_next(Token::RightParen)?;
                     Ok(Expr::Grouping(Box::new(expr)))
                 }
+                Token::Identifier(name) => Ok(Expr::Variable(name)),
                 _ => Err(errors::Error {
                     kind: errors::ErrorKind::Parsing,
                     description: errors::ErrorDescription {

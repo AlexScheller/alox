@@ -1,16 +1,18 @@
 use crate::{
-    errors,
+    environment, errors,
     lexemes::Token,
-    parser::{BinaryExpr, Expr, LiteralKind, Stmt, TernaryExpr, UnaryExpr},
+    parser::{BinaryExpr, Expr, Stmt, TernaryExpr, UnaryExpr, Value},
 };
 
 pub struct Interpreter {
+    environment: environment::Environment,
     error_log: errors::ErrorLog,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
+            environment: environment::Environment::new(),
             error_log: errors::ErrorLog::new(),
         }
     }
@@ -26,26 +28,34 @@ impl Interpreter {
                 }
                 Err(error) => self.error_log.push(error),
             },
+            Stmt::Var(stmt) => match self.expression(stmt.initializer) {
+                Ok(value) => match self.environment.define(stmt.name, value) {
+                    Ok(_) => (),
+                    Err(error) => self.error_log.push(error),
+                },
+                Err(error) => self.error_log.push(error),
+            },
         }
     }
-    fn expression(&self, expression: Expr) -> Result<LiteralKind, errors::Error> {
+    fn expression(&mut self, expression: Expr) -> Result<Value, errors::Error> {
         match expression {
             Expr::Literal(literal) => Ok(literal),
             Expr::Grouping(group) => self.expression(*group),
             Expr::Unary(unary) => self.unary_expression(unary),
             Expr::Binary(binary) => self.binary_expression(binary),
             Expr::Ternary(ternary) => self.ternary_expression(ternary),
+            Expr::Variable(name) => self.environment.get(name),
         }
     }
     fn unary_expression(
-        &self,
+        &mut self,
         UnaryExpr { operator, right }: UnaryExpr,
-    ) -> Result<LiteralKind, errors::Error> {
+    ) -> Result<Value, errors::Error> {
         let right_literal = self.expression(*right)?;
         match operator.token {
             Token::Minus => {
-                if let LiteralKind::Number(value) = right_literal {
-                    return Ok(LiteralKind::Number(-value));
+                if let Value::Number(value) = right_literal {
+                    return Ok(Value::Number(-value));
                 } else {
                     return Err(construct_runtime_error(format!(
                         "Illegal operand for unary '{}' expression: {:?}",
@@ -55,8 +65,8 @@ impl Interpreter {
                 }
             }
             Token::Bang => match right_literal {
-                LiteralKind::Nil | LiteralKind::Boolean(_) => {
-                    return Ok(LiteralKind::Boolean(!is_truthy(right_literal)));
+                Value::Nil | Value::Boolean(_) => {
+                    return Ok(Value::Boolean(!is_truthy(right_literal)));
                 }
                 _ => {
                     return Err(construct_runtime_error(format!(
@@ -73,17 +83,17 @@ impl Interpreter {
         }
     }
     fn binary_expression(
-        &self,
+        &mut self,
         BinaryExpr {
             left,
             operator,
             right,
         }: BinaryExpr,
-    ) -> Result<LiteralKind, errors::Error> {
+    ) -> Result<Value, errors::Error> {
         let left_literal = self.expression(*left)?;
         let right_literal = self.expression(*right)?;
         let left_value = match left_literal {
-            LiteralKind::Number(value) => value,
+            Value::Number(value) => value,
             _ => {
                 return Err(construct_runtime_error(format!(
                     "Illegal operand for binary '{}' expression: {:?} {} {:?}",
@@ -92,7 +102,7 @@ impl Interpreter {
             }
         };
         let right_value = match right_literal {
-            LiteralKind::Number(value) => value,
+            Value::Number(value) => value,
             _ => {
                 return Err(construct_runtime_error(format!(
                     "Illegal operand for binary '{}' expression: {:?} {} {:?}",
@@ -101,30 +111,30 @@ impl Interpreter {
             }
         };
         return match operator.token {
-            Token::Minus => Ok(LiteralKind::Number(left_value - right_value)),
-            Token::Slash => Ok(LiteralKind::Number(left_value / right_value)),
-            Token::Star => Ok(LiteralKind::Number(left_value * right_value)),
-            Token::Plus => Ok(LiteralKind::Number(left_value + right_value)),
-            Token::Greater => Ok(LiteralKind::Boolean(left_value > right_value)),
-            Token::GreaterEqual => Ok(LiteralKind::Boolean(left_value >= right_value)),
-            Token::Less => Ok(LiteralKind::Boolean(left_value < right_value)),
-            Token::LessEqual => Ok(LiteralKind::Boolean(left_value <= right_value)),
-            Token::BangEqual => Ok(LiteralKind::Boolean(!is_equal(left_literal, right_literal))),
-            Token::EqualEqual => Ok(LiteralKind::Boolean(is_equal(left_literal, right_literal))),
+            Token::Minus => Ok(Value::Number(left_value - right_value)),
+            Token::Slash => Ok(Value::Number(left_value / right_value)),
+            Token::Star => Ok(Value::Number(left_value * right_value)),
+            Token::Plus => Ok(Value::Number(left_value + right_value)),
+            Token::Greater => Ok(Value::Boolean(left_value > right_value)),
+            Token::GreaterEqual => Ok(Value::Boolean(left_value >= right_value)),
+            Token::Less => Ok(Value::Boolean(left_value < right_value)),
+            Token::LessEqual => Ok(Value::Boolean(left_value <= right_value)),
+            Token::BangEqual => Ok(Value::Boolean(!is_equal(left_literal, right_literal))),
+            Token::EqualEqual => Ok(Value::Boolean(is_equal(left_literal, right_literal))),
             _ => panic!("Illegal operator for binary expression: {}", operator.token),
         };
     }
     fn ternary_expression(
-        &self,
+        &mut self,
         TernaryExpr {
             condition,
             left_result,
             right_result,
         }: TernaryExpr,
-    ) -> Result<LiteralKind, errors::Error> {
+    ) -> Result<Value, errors::Error> {
         let condition_literal = self.expression(*condition)?;
         // Note, we could check if this is "truthy" instead of an explicit boolean check.
-        if let LiteralKind::Boolean(condition_value) = condition_literal {
+        if let Value::Boolean(condition_value) = condition_literal {
             // This is an important decision. We currently short circuit, but that doesn't mean we
             // must. Perhaps it's valuable to let the other expression evaluate.
             if condition_value {
@@ -147,18 +157,18 @@ trait Boolable {
     fn to_bool_option(&self) -> Option<bool>;
 }
 
-impl Boolable for LiteralKind {
+impl Boolable for Value {
     fn to_bool_option(&self) -> Option<bool> {
         match self {
-            LiteralKind::Boolean(value) => Some(*value),
-            LiteralKind::Nil => Some(false),
-            LiteralKind::Number(_) => None,
-            LiteralKind::String(_) => None,
+            Value::Boolean(value) => Some(*value),
+            Value::Nil => Some(false),
+            Value::Number(_) => None,
+            Value::String(_) => None,
         }
     }
 }
 
-fn is_truthy(investigatee: LiteralKind) -> bool {
+fn is_truthy(investigatee: Value) -> bool {
     if let Some(value) = investigatee.to_bool_option() {
         value
     } else {
@@ -168,7 +178,7 @@ fn is_truthy(investigatee: LiteralKind) -> bool {
 
 // For now, just relying on PartialEq should be good enough. In the future, this may need to be
 // changed, which is why we use this function to wrap the equality check.
-fn is_equal(a: LiteralKind, b: LiteralKind) -> bool {
+fn is_equal(a: Value, b: Value) -> bool {
     a == b
     // Maybe in the future we want to prevent comparisons between types that can never be
     // equivalent. Certainly I have no interest in equality checks succeeding between heterogeneous
@@ -181,6 +191,7 @@ fn is_equal(a: LiteralKind, b: LiteralKind) -> bool {
 
 // -----| Reporting Utilities |-----
 
+// TODO: Use this in the environment class.
 fn construct_runtime_error(description: String) -> errors::Error {
     errors::Error {
         kind: errors::ErrorKind::Runtime,
@@ -189,5 +200,11 @@ fn construct_runtime_error(description: String) -> errors::Error {
             location: None, // TODO?
             description,
         },
+    }
+}
+
+impl errors::ErrorLoggable for Interpreter {
+    fn error_log(&self) -> &errors::ErrorLog {
+        &self.error_log
     }
 }
