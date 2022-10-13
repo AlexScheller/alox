@@ -150,13 +150,10 @@ const STATEMENT_BEGINNING_TOKENS: &[Token] = &[
 
 // -----| Expressions |-----
 
-// TODO: Find out if implementing copy is possible. Probably not because of the String.
-#[derive(Debug, PartialEq, Clone)]
-pub enum Value {
-    Number(f64),
-    String(String),
-    Boolean(bool),
-    Nil,
+#[derive(Debug)]
+pub struct AssignmentExpr {
+    pub name: String,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug)]
@@ -180,14 +177,24 @@ pub struct UnaryExpr {
     pub right: Box<Expr>,
 }
 
+// TODO: Find out if implementing copy is possible. Probably not because of the String.
+#[derive(Debug, PartialEq, Clone)]
+pub enum Value {
+    Number(f64),
+    String(String),
+    Boolean(bool),
+    Nil,
+}
+
 #[derive(Debug)]
 pub enum Expr {
+    Assignment(AssignmentExpr),
     Binary(BinaryExpr),
     Ternary(TernaryExpr),
     Grouping(Box<Expr>),
     Unary(UnaryExpr),
     Literal(Value),
-    Variable(String),
+    Variable(String), // For declarations *and* references?
 }
 
 impl fmt::Display for Expr {
@@ -223,6 +230,13 @@ impl fmt::Display for Expr {
             }
             Expr::Variable(name) => {
                 format!("(variable {})", name)
+            }
+            Expr::Assignment(expr) => {
+                format!(
+                    "(Assignment {} = {})",
+                    expr.name,
+                    format!("{}", &expr.value)
+                )
             }
         };
         write!(f, "{}", value)
@@ -375,7 +389,24 @@ impl Parser {
     }
     // --- Expressions ---
     fn expression(&mut self) -> Result<Expr, errors::Error> {
-        self.ternary()
+        self.assignment()
+    }
+    fn assignment(&mut self) -> Result<Expr, errors::Error> {
+        let expr = self.ternary()?;
+        if let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token == lexemes::Token::Equal {
+                // Recursive, because we allow multiple assignment. TODO: See if I actually want
+                // this.
+                let value = self.assignment()?;
+                if let Expr::Variable(name) = expr {
+                    return Ok(Expr::Assignment(AssignmentExpr {
+                        name,
+                        value: Box::new(value),
+                    }));
+                }
+            }
+        }
+        Ok(expr)
     }
     fn ternary(&mut self) -> Result<Expr, errors::Error> {
         let mut expr = self.equality()?;

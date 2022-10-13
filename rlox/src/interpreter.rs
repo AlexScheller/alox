@@ -1,7 +1,7 @@
 use crate::{
     environment, errors,
     lexemes::Token,
-    parser::{BinaryExpr, Expr, Stmt, TernaryExpr, UnaryExpr, Value},
+    parser::{AssignmentExpr, BinaryExpr, Expr, Stmt, TernaryExpr, UnaryExpr, Value},
 };
 
 pub struct Interpreter {
@@ -29,7 +29,7 @@ impl Interpreter {
                 Err(error) => self.error_log.push(error),
             },
             Stmt::Var(stmt) => match self.expression(stmt.initializer) {
-                Ok(value) => match self.environment.define(stmt.name, value) {
+                Ok(value) => match self.environment.define(&stmt.name, value) {
                     Ok(_) => (),
                     Err(error) => self.error_log.push(error),
                 },
@@ -44,7 +44,8 @@ impl Interpreter {
             Expr::Unary(unary) => self.unary_expression(unary),
             Expr::Binary(binary) => self.binary_expression(binary),
             Expr::Ternary(ternary) => self.ternary_expression(ternary),
-            Expr::Variable(name) => self.environment.get(name),
+            Expr::Variable(name) => self.environment.get(&name),
+            Expr::Assignment(assignment) => self.assignment_expression(assignment),
         }
     }
     fn unary_expression(
@@ -148,6 +149,14 @@ impl Interpreter {
                 condition_literal
             )));
         }
+    }
+    fn assignment_expression(
+        &mut self,
+        AssignmentExpr { name, value }: AssignmentExpr,
+    ) -> Result<Value, errors::Error> {
+        let value = self.expression(*value)?;
+        self.environment.assign(&name, value.clone())?;
+        Ok(value)
     }
 }
 
