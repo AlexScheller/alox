@@ -34,6 +34,7 @@ impl Environment {
     pub fn assign(&mut self, name: &String, value: Value) -> Result<Value, errors::Error> {
         if self.values.contains_key(name) {
             self.values.insert(name.clone(), value.clone());
+            return Ok(value);
         }
         Err(errors::Error {
             kind: errors::ErrorKind::Runtime,

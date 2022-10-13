@@ -395,6 +395,7 @@ impl Parser {
         let expr = self.ternary()?;
         if let Some(source_token) = self.scanner.peek_next() {
             if source_token.token == lexemes::Token::Equal {
+                self.scanner.scan_next();
                 // Recursive, because we allow multiple assignment. TODO: See if I actually want
                 // this.
                 let value = self.assignment()?;
@@ -404,6 +405,14 @@ impl Parser {
                         value: Box::new(value),
                     }));
                 }
+                return Err(errors::Error {
+                    kind: errors::ErrorKind::Parsing,
+                    description: errors::ErrorDescription {
+                        subject: None,
+                        location: Some(source_token.location),
+                        description: format!("Invalid assignment target '{}'", source_token.token),
+                    },
+                });
             }
         }
         Ok(expr)
