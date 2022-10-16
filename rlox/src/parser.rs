@@ -53,7 +53,7 @@ impl Scanner {
     pub fn expect_and_scan_next(
         &mut self,
         expected: Token,
-        error_msg: Option<&str>,
+        error_msg: Option<String>,
     ) -> Result<SourceToken, errors::Error> {
         if let Some(source_token) = self.peek_next() {
             self.scan_next();
@@ -61,7 +61,7 @@ impl Scanner {
                 Ok(source_token)
             } else {
                 let description = if let Some(msg) = error_msg {
-                    String::from(msg)
+                    msg
                 } else {
                     format!(
                         "Expected '{}' after expression, instead found '{}'",
@@ -375,7 +375,10 @@ impl Parser {
             // I differ from the book here, by disallowing uninitialized variables.
             self.scanner.expect_and_scan_next(
                 lexemes::Token::Equal,
-                Some("Expected initializer after variable declaration"),
+                Some(format!(
+                    "Expected initializer after variable declaration: 'var {}'",
+                    name
+                )),
             )?;
             let initializer = self.expression()?;
             self.scanner
