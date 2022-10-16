@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use crate::{errors, parser::Value};
 
+#[derive(Clone)]
 pub struct Environment {
+    enclosing: Option<Box<Environment>>,
     values: HashMap<String, Value>,
 }
 
@@ -10,6 +12,13 @@ pub struct Environment {
 impl Environment {
     pub fn new() -> Self {
         Environment {
+            enclosing: None,
+            values: HashMap::new(),
+        }
+    }
+    pub fn new_with_enclosing(enclosing: Environment) -> Self {
+        Environment {
+            enclosing: Some(Box::new(enclosing)),
             values: HashMap::new(),
         }
     }
@@ -36,6 +45,9 @@ impl Environment {
             self.values.insert(name.clone(), value.clone());
             return Ok(value);
         }
+        if let Some(enclosing) = &mut self.enclosing {
+            return enclosing.assign(name, value);
+        }
         Err(errors::Error {
             kind: errors::ErrorKind::Runtime,
             description: errors::ErrorDescription {
@@ -47,9 +59,12 @@ impl Environment {
             },
         })
     }
-    pub fn get(&mut self, name: &String) -> Result<Value, errors::Error> {
+    pub fn get(&self, name: &String) -> Result<Value, errors::Error> {
         if let Some(value) = self.values.get(name) {
             return Ok(value.clone());
+        }
+        if let Some(enclosing) = &self.enclosing {
+            return enclosing.get(name);
         }
         Err(errors::Error {
             kind: errors::ErrorKind::Runtime,

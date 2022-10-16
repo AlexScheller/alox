@@ -50,21 +50,30 @@ impl Scanner {
         }
         false
     }
-    pub fn expect_and_scan_next(&mut self, expected: Token) -> Result<SourceToken, errors::Error> {
+    pub fn expect_and_scan_next(
+        &mut self,
+        expected: Token,
+        error_msg: Option<&str>,
+    ) -> Result<SourceToken, errors::Error> {
         if let Some(source_token) = self.peek_next() {
             self.scan_next();
             return if enum_variant_equal(&source_token.token, &expected) {
                 Ok(source_token)
             } else {
+                let description = if let Some(msg) = error_msg {
+                    String::from(msg)
+                } else {
+                    format!(
+                        "Expected '{}' after expression, instead found '{}'",
+                        expected, source_token.token
+                    )
+                };
                 Err(errors::Error {
                     kind: errors::ErrorKind::Parsing,
                     description: errors::ErrorDescription {
                         subject: None,
                         location: Some(source_token.location),
-                        description: format!(
-                            "Expected '{}' after expression, instead found '{}'",
-                            expected, source_token.token
-                        ),
+                        description,
                     },
                 })
             };
@@ -111,9 +120,10 @@ impl Scanner {
 
 // ----- Grammar -----
 //
-// statement    -> epxrStmt | print Stmt ;
+// statement    -> epxrStmt | print Stmt | block;
 // exprStmt     -> expression ";" ;
 // printStmt    -> "print" expression ";" ;
+// block        -> "{" declaration* "}" ;
 
 pub struct ExprStmt {
     pub expression: Expr,
@@ -132,6 +142,7 @@ pub struct VarStmt {
 }
 
 pub enum Stmt {
+    Block(Vec<Stmt>),
     Expression(ExprStmt),
     Print(PrintStmt),
     Var(VarStmt), // Is this a declaration or a statement?
@@ -343,7 +354,9 @@ impl Parser {
         // TODO: Find a way to either make this a constant, or to pass just the kind of an enum, and
         // not an instance of it.
         let IDENTIFIER_EXEMPLAR = lexemes::Token::Identifier(String::from("example"));
-        let next = self.scanner.expect_and_scan_next(IDENTIFIER_EXEMPLAR)?;
+        let next = self
+            .scanner
+            .expect_and_scan_next(IDENTIFIER_EXEMPLAR, None)?;
         // Quite the if-let/deconstruction here...
         if let SourceToken {
             token: lexemes::Token::Identifier(name),
@@ -360,31 +373,55 @@ impl Parser {
             // return Ok(Stmt::Var(VarStmt { name, initializer }));
 
             // I differ from the book here, by disallowing uninitialized variables.
-            self.scanner.expect_and_scan_next(lexemes::Token::Equal)?;
+            self.scanner.expect_and_scan_next(
+                lexemes::Token::Equal,
+                Some("Expected initializer after variable declaration"),
+            )?;
             let initializer = self.expression()?;
             self.scanner
-                .expect_and_scan_next(lexemes::Token::Semicolon)?;
+                .expect_and_scan_next(lexemes::Token::Semicolon, None)?;
             return Ok(Stmt::Var(VarStmt { name, initializer }));
         };
         panic!("`consume_next_token` has to be broken for this to be reachable");
     }
     // --- Statements ---
     fn statement(&mut self) -> Result<Stmt, errors::Error> {
+        // Should this be converted to a `match`?
         if self.scanner.matches_then_scan_next(lexemes::Token::Print) {
             return self.print_statement();
+        }
+        if self
+            .scanner
+            .matches_then_scan_next(lexemes::Token::LeftBrace)
+        {
+            return self.block_statement();
         }
         self.expression_statement()
     }
     fn print_statement(&mut self) -> Result<Stmt, errors::Error> {
         let expression = self.expression()?;
         self.scanner
-            .expect_and_scan_next(lexemes::Token::Semicolon)?;
+            .expect_and_scan_next(lexemes::Token::Semicolon, None)?;
         Ok(Stmt::Print(PrintStmt { expression }))
+    }
+    fn block_statement(&mut self) -> Result<Stmt, errors::Error> {
+        let mut statements = Vec::new();
+        while let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token != lexemes::Token::RightBrace {
+                let declaration = self.declaration()?;
+                statements.push(declaration);
+            } else {
+                break;
+            }
+        }
+        self.scanner
+            .expect_and_scan_next(lexemes::Token::RightBrace, None)?;
+        Ok(Stmt::Block(statements))
     }
     fn expression_statement(&mut self) -> Result<Stmt, errors::Error> {
         let expression = self.expression()?;
         self.scanner
-            .expect_and_scan_next(lexemes::Token::Semicolon)?;
+            .expect_and_scan_next(lexemes::Token::Semicolon, None)?;
         Ok(Stmt::Expression(ExprStmt { expression }))
     }
     // --- Expressions ---
@@ -396,8 +433,8 @@ impl Parser {
         if let Some(source_token) = self.scanner.peek_next() {
             if source_token.token == lexemes::Token::Equal {
                 self.scanner.scan_next();
-                // Recursive, because we allow multiple assignment. TODO: See if I actually want
-                // this.
+                // Recursive, because we allow multiple assignment, and it's right-associative.
+                // TODO: See if I actually want this.
                 let value = self.assignment()?;
                 if let Expr::Variable(name) = expr {
                     return Ok(Expr::Assignment(AssignmentExpr {
@@ -423,7 +460,8 @@ impl Parser {
             if source_token.token == TERNARY_TEST_TOKEN {
                 self.scanner.scan_next();
                 let left_result = self.equality()?;
-                self.scanner.expect_and_scan_next(TERNARY_BRANCH_TOKEN)?;
+                self.scanner
+                    .expect_and_scan_next(TERNARY_BRANCH_TOKEN, None)?;
                 let right_result = self.equality()?;
                 expr = Expr::Ternary(TernaryExpr {
                     condition: Box::new(expr),
@@ -530,7 +568,7 @@ impl Parser {
                 Token::String(value) => Ok(Expr::Literal(Value::String(value))),
                 Token::LeftParen => {
                     let expr = self.expression()?;
-                    self.scanner.expect_and_scan_next(Token::RightParen)?;
+                    self.scanner.expect_and_scan_next(Token::RightParen, None)?;
                     Ok(Expr::Grouping(Box::new(expr)))
                 }
                 Token::Identifier(name) => Ok(Expr::Variable(name)),

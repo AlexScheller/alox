@@ -1,5 +1,6 @@
 use crate::{
-    environment, errors,
+    environment::{self, Environment},
+    errors,
     lexemes::Token,
     parser::{AssignmentExpr, BinaryExpr, Expr, Stmt, TernaryExpr, UnaryExpr, Value},
 };
@@ -35,6 +36,12 @@ impl Interpreter {
                 },
                 Err(error) => self.error_log.push(error),
             },
+            Stmt::Block(stmts) => {
+                self.block(
+                    stmts,
+                    Environment::new_with_enclosing(self.environment.clone()),
+                );
+            }
         }
     }
     fn expression(&mut self, expression: Expr) -> Result<Value, errors::Error> {
@@ -157,6 +164,14 @@ impl Interpreter {
         let value = self.expression(*value)?;
         self.environment.assign(&name, value.clone())?;
         Ok(value)
+    }
+    fn block(&mut self, statements: Vec<Stmt>, new_environment: Environment) {
+        let previous_environment = self.environment.clone();
+        self.environment = new_environment;
+        for statement in statements {
+            self.interpret(statement);
+        }
+        self.environment = previous_environment;
     }
 }
 

@@ -54,7 +54,7 @@ fn match_keyword(symbol: &str) -> Option<Token> {
         "super" => Some(Token::Super),
         "this" => Some(Token::This),
         "true" => Some(Token::True),
-        "let" => Some(Token::Var), // I differ from the book here, which uses "var".
+        "var" => Some(Token::Var),
         "while" => Some(Token::While),
         _ => None,
     }

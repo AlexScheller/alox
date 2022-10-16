@@ -119,7 +119,7 @@ impl fmt::Display for Token {
             Token::Super => String::from("super"),
             Token::This => String::from("this"),
             Token::True => String::from("true"),
-            Token::Var => String::from("let"),
+            Token::Var => String::from("var"),
             Token::While => String::from("while"),
             // --- Meta ---
             Token::Comment(comment) => format!("comment \"{}\"", comment),
