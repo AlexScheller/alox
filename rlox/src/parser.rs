@@ -560,7 +560,7 @@ impl Parser {
 }
 
 impl errors::ErrorLoggable for Parser {
-    fn error_log(&self) -> &errors::ErrorLog {
-        &self.error_log
+    fn get_error_log(&mut self) -> &mut errors::ErrorLog {
+        &mut self.error_log
     }
 }

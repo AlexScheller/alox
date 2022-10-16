@@ -1,5 +1,0 @@
-// Here is an example lox program
-var name = "Alex";
-if (name == "Alex") {
-    print (3 + 4);
-}

@@ -58,14 +58,14 @@ fn interpret(
 
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.generate_tokens();
-    if lexer.error_log().len() > 0 {
-        errors::print_error_log(lexer.error_log());
+    if lexer.get_error_log().len() > 0 {
+        errors::print_error_log(lexer.get_error_log());
     }
 
     let mut parser = parser::Parser::new(tokens);
     let statements = parser.parse();
-    if parser.error_log().len() > 0 {
-        errors::print_error_log(parser.error_log());
+    if parser.get_error_log().len() > 0 {
+        errors::print_error_log(parser.get_error_log());
         if should_exit_on_error {
             errors::exit_with_code(exitcode::DATAERR)
         }
@@ -73,11 +73,12 @@ fn interpret(
 
     for statement in statements {
         interpreter.interpret(statement);
-        if interpreter.error_log().len() > 0 {
-            errors::print_error_log(interpreter.error_log());
+        if interpreter.get_error_log().len() > 0 {
+            errors::print_error_log(interpreter.get_error_log());
             if should_exit_on_error {
                 errors::exit_with_code(exitcode::DATAERR)
             }
+            interpreter.clear_error_log();
         }
     }
 }

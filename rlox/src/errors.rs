@@ -84,10 +84,16 @@ impl ErrorLog {
     pub fn len(&self) -> usize {
         self.errors.len()
     }
+    pub fn clear(&mut self) {
+        self.errors.clear();
+    }
 }
 
 pub trait ErrorLoggable {
-    fn error_log(&self) -> &ErrorLog;
+    fn get_error_log(&mut self) -> &mut ErrorLog;
+    fn clear_error_log(&mut self) {
+        self.get_error_log().clear();
+    }
 }
 
 // -----| Utilities |-----

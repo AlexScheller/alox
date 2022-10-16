@@ -1,0 +1,13 @@
+// Here is an example lox program
+let name = "Alex";
+print name;
+{
+    let name = "Talex";
+    print name;
+    {
+        let name = "Balex";
+        print name;
+    }
+    print name;
+}
+print name;
