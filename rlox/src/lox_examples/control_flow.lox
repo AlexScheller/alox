@@ -1,0 +1,7 @@
+var answer = "Ten is what?";
+if (10 > 100 - 99) {
+    answer = "Ten is greater than 100 - 99";
+} else {
+    answer = "Ten is less than 100 - 99";
+}
+print answer;

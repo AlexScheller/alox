@@ -116,17 +116,22 @@ impl Scanner {
 // I differ from the book here. I disallow uninitialized variables.
 // varDecl      -> "var" IDENTIFIER "=" expression ";" ;
 
-// -----| Statements |-----
-
-// ----- Grammar -----
+// -----| Statement Grammar |-----
 //
-// statement    -> epxrStmt | print Stmt | block;
+// statement    -> epxrStmt | ifStmt | printStmt | block;
 // exprStmt     -> expression ";" ;
+// ifStmt       -> "if" "(" expression ")" statement ( "else" statement )? ;
 // printStmt    -> "print" expression ";" ;
 // block        -> "{" declaration* "}" ;
 
 pub struct ExprStmt {
     pub expression: Expr,
+}
+
+pub struct IfStmt {
+    pub condition: Expr,
+    pub then_branch: Box<Stmt>,
+    pub else_branch: Option<Box<Stmt>>,
 }
 
 // TODO: Get rid of this as soon as you have a standard library.
@@ -144,6 +149,7 @@ pub struct VarStmt {
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expression(ExprStmt),
+    If(IfStmt),
     Print(PrintStmt),
     Var(VarStmt), // Is this a declaration or a statement?
 }
@@ -390,6 +396,9 @@ impl Parser {
     // --- Statements ---
     fn statement(&mut self) -> Result<Stmt, errors::Error> {
         // Should this be converted to a `match`?
+        if self.scanner.matches_then_scan_next(lexemes::Token::If) {
+            return self.if_statement();
+        }
         if self.scanner.matches_then_scan_next(lexemes::Token::Print) {
             return self.print_statement();
         }
@@ -400,6 +409,33 @@ impl Parser {
             return self.block_statement();
         }
         self.expression_statement()
+    }
+    fn if_statement(&mut self) -> Result<Stmt, errors::Error> {
+        self.scanner.expect_and_scan_next(
+            lexemes::Token::LeftParen,
+            Some(String::from("Expected '(' after 'if'")),
+        )?;
+        let condition = self.expression()?;
+        self.scanner.expect_and_scan_next(
+            lexemes::Token::RightParen,
+            Some(String::from("Expected ')' after 'if' condition")),
+        )?;
+        let then_branch = Box::new(self.statement()?);
+        let else_branch = if let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token == lexemes::Token::Else {
+                self.scanner.scan_next();
+                Some(Box::new(self.statement()?))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        Ok(Stmt::If(IfStmt {
+            condition,
+            then_branch,
+            else_branch,
+        }))
     }
     fn print_statement(&mut self) -> Result<Stmt, errors::Error> {
         let expression = self.expression()?;

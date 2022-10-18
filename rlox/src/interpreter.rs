@@ -23,6 +23,18 @@ impl Interpreter {
                 Ok(_) => {}
                 Err(error) => self.error_log.push(error),
             },
+            Stmt::If(stmt) => match self.expression(stmt.condition) {
+                Ok(value) => {
+                    if is_truthy(value) {
+                        self.interpret(*stmt.then_branch);
+                    } else {
+                        if let Some(else_branch) = stmt.else_branch {
+                            self.interpret(*else_branch);
+                        }
+                    }
+                }
+                Err(error) => self.error_log.push(error),
+            },
             Stmt::Print(stmt) => match self.expression(stmt.expression) {
                 Ok(value) => {
                     println!("{:?}", value);
