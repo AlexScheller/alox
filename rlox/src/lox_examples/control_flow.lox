@@ -1,7 +1,10 @@
-var answer = "Ten is what?";
-if (10 > 100 - 99) {
-    answer = "Ten is greater than 100 - 99";
+var value = 75;
+if (value > 100) {
+    print "Greater than 100";
+} else if (value > 50) {
+    print "Greater than 50";
 } else {
-    answer = "Ten is less than 100 - 99";
+    print "Not greater than 50";
 }
-print answer;
+var shortCircuit = false;
+print shortCircuit or value > 100 ? "Greater than 100" : "Less than 100";

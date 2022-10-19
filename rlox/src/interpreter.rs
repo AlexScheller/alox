@@ -1,8 +1,8 @@
 use crate::{
     environment::{self, Environment},
     errors,
-    lexemes::Token,
-    parser::{AssignmentExpr, BinaryExpr, Expr, Stmt, TernaryExpr, UnaryExpr, Value},
+    lexemes::{self, Token},
+    parser::{AssignmentExpr, BinaryExpr, Expr, LogicalExpr, Stmt, TernaryExpr, UnaryExpr, Value},
 };
 
 pub struct Interpreter {
@@ -25,7 +25,7 @@ impl Interpreter {
             },
             Stmt::If(stmt) => match self.expression(stmt.condition) {
                 Ok(value) => {
-                    if is_truthy(value) {
+                    if is_truthy(&value) {
                         self.interpret(*stmt.then_branch);
                     } else {
                         if let Some(else_branch) = stmt.else_branch {
@@ -62,6 +62,7 @@ impl Interpreter {
             Expr::Grouping(group) => self.expression(*group),
             Expr::Unary(unary) => self.unary_expression(unary),
             Expr::Binary(binary) => self.binary_expression(binary),
+            Expr::Logical(logical) => self.logical_expression(logical),
             Expr::Ternary(ternary) => self.ternary_expression(ternary),
             Expr::Variable(name) => self.environment.get(&name),
             Expr::Assignment(assignment) => self.assignment_expression(assignment),
@@ -86,7 +87,7 @@ impl Interpreter {
             }
             Token::Bang => match right_literal {
                 Value::Nil | Value::Boolean(_) => {
-                    return Ok(Value::Boolean(!is_truthy(right_literal)));
+                    return Ok(Value::Boolean(!is_truthy(&right_literal)));
                 }
                 _ => {
                     return Err(construct_runtime_error(format!(
@@ -143,6 +144,27 @@ impl Interpreter {
             Token::EqualEqual => Ok(Value::Boolean(is_equal(left_literal, right_literal))),
             _ => panic!("Illegal operator for binary expression: {}", operator.token),
         };
+    }
+    fn logical_expression(
+        &mut self,
+        LogicalExpr {
+            left,
+            operator,
+            right,
+        }: LogicalExpr,
+    ) -> Result<Value, errors::Error> {
+        let left_literal = self.expression(*left)?;
+        if operator.token == lexemes::Token::Or {
+            if is_truthy(&left_literal) {
+                return Ok(left_literal);
+            }
+        // and
+        } else {
+            if !is_truthy(&left_literal) {
+                return Ok(left_literal);
+            }
+        }
+        self.expression(*right)
     }
     fn ternary_expression(
         &mut self,
@@ -204,7 +226,7 @@ impl Boolable for Value {
     }
 }
 
-fn is_truthy(investigatee: Value) -> bool {
+fn is_truthy(investigatee: &Value) -> bool {
     if let Some(value) = investigatee.to_bool_option() {
         value
     } else {

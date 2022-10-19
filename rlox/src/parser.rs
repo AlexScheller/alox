@@ -1,6 +1,6 @@
 // -----| Lexeme Scanner |-----
 
-use std::fmt;
+use std::{error, fmt};
 
 use crate::{
     errors,
@@ -113,8 +113,7 @@ impl Scanner {
 // -----| Declaration Grammar |-----
 //
 // declaration  -> varDecl | statement ;
-// I differ from the book here. I disallow uninitialized variables.
-// varDecl      -> "var" IDENTIFIER "=" expression ";" ;
+// varDecl      -> "var" IDENTIFIER "=" expression ";" ; // I differ from the book here. I disallow uninitialized variables.
 
 // -----| Statement Grammar |-----
 //
@@ -194,6 +193,13 @@ pub struct UnaryExpr {
     pub right: Box<Expr>,
 }
 
+#[derive(Debug)]
+pub struct LogicalExpr {
+    pub left: Box<Expr>,
+    pub operator: SourceToken,
+    pub right: Box<Expr>,
+}
+
 // TODO: Find out if implementing copy is possible. Probably not because of the String.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -210,6 +216,7 @@ pub enum Expr {
     Ternary(TernaryExpr),
     Grouping(Box<Expr>),
     Unary(UnaryExpr),
+    Logical(LogicalExpr),
     Literal(Value),
     Variable(String), // For declarations *and* references?
 }
@@ -244,6 +251,14 @@ impl fmt::Display for Expr {
             },
             Expr::Unary(expr) => {
                 format!("({} {})", expr.operator.token, format!("{}", &expr.right))
+            }
+            Expr::Logical(expr) => {
+                format!(
+                    "({} {} {})",
+                    expr.operator.token,
+                    format!("{}", &expr.left),
+                    format!("{}", &expr.right)
+                )
             }
             Expr::Variable(name) => {
                 format!("(variable {})", name)
@@ -285,9 +300,10 @@ const TERNARY_BRANCH_TOKEN: lexemes::Token = lexemes::Token::Colon;
 //
 // In increasing order of precedence
 //
-// expression  -> ternary ;
-//
-// expression  -> ternary ;
+// expression  -> assignment ;
+// assignment  -> IDENTIFIER "=" assignment | logic_or; // TODO: Is this correct? even in the book, ternary is handled before the assignment logic
+// logic_or    -> logic_and ( "or" logic_and )* ;
+// logic_and   -> ternary ( "and" ternary )* ;
 // ternary     -> equality ( "?" equality ":" equality )* ;
 // equality    -> comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison  -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -468,7 +484,7 @@ impl Parser {
         self.assignment()
     }
     fn assignment(&mut self) -> Result<Expr, errors::Error> {
-        let expr = self.ternary()?;
+        let expr = self.or()?;
         if let Some(source_token) = self.scanner.peek_next() {
             if source_token.token == lexemes::Token::Equal {
                 self.scanner.scan_next();
@@ -489,6 +505,40 @@ impl Parser {
                         description: format!("Invalid assignment target '{}'", source_token.token),
                     },
                 });
+            }
+        }
+        Ok(expr)
+    }
+    fn or(&mut self) -> Result<Expr, errors::Error> {
+        let mut expr = self.and()?;
+        while let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token == lexemes::Token::Or {
+                self.scanner.scan_next();
+                let right = self.and()?;
+                expr = Expr::Logical(LogicalExpr {
+                    left: Box::new(expr),
+                    operator: source_token,
+                    right: Box::new(right),
+                });
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+    fn and(&mut self) -> Result<Expr, errors::Error> {
+        let mut expr = self.ternary()?;
+        while let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token == lexemes::Token::And {
+                self.scanner.scan_next();
+                let right = self.ternary()?;
+                expr = Expr::Logical(LogicalExpr {
+                    left: Box::new(expr),
+                    operator: source_token,
+                    right: Box::new(right),
+                });
+            } else {
+                break;
             }
         }
         Ok(expr)
