@@ -153,6 +153,43 @@ pub enum Stmt {
     Var(VarStmt), // Is this a declaration or a statement?
 }
 
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = match self {
+            Stmt::Block(stmts) => {
+                format!(
+                    "{{block {{ {} }} }}",
+                    stmts
+                        .iter()
+                        .map(|stmt| stmt.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
+            }
+            Stmt::Expression(stmt) => {
+                format!("{{expr {}}}", &stmt.expression)
+            }
+            Stmt::If(stmt) => {
+                if let Some(else_branch) = &stmt.else_branch {
+                    format!(
+                        "{{if ({}) then {} else {}}}",
+                        &stmt.condition, &stmt.then_branch, &else_branch,
+                    )
+                } else {
+                    format!("{{if ({}) then {}}}", &stmt.condition, &stmt.then_branch)
+                }
+            }
+            Stmt::Print(stmt) => {
+                format!("{{print {}}}", &stmt.expression)
+            }
+            Stmt::Var(stmt) => {
+                format!("{{var {} = {}}}", &stmt.name, &stmt.initializer)
+            }
+        };
+        write!(f, "{}", value)
+    }
+}
+
 const STATEMENT_BEGINNING_TOKENS: &[Token] = &[
     Token::Class,
     Token::For,
@@ -301,10 +338,10 @@ const TERNARY_BRANCH_TOKEN: lexemes::Token = lexemes::Token::Colon;
 // In increasing order of precedence
 //
 // expression  -> assignment ;
-// assignment  -> IDENTIFIER "=" assignment | logic_or; // TODO: Is this correct? even in the book, ternary is handled before the assignment logic
+// assignment  -> IDENTIFIER "=" assignment | ternary; // TODO: Is this correct? even in the book, ternary is handled *before* the assignment logic
+// ternary     -> logic_or ( "?" logic_or ":" logic_or )* ;
 // logic_or    -> logic_and ( "or" logic_and )* ;
-// logic_and   -> ternary ( "and" ternary )* ;
-// ternary     -> equality ( "?" equality ":" equality )* ;
+// logic_and   -> equality ( "and" equality )* ;
 // equality    -> comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison  -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 // term        -> factor ( ( "-" | "+" ) factor )* ;
@@ -484,7 +521,7 @@ impl Parser {
         self.assignment()
     }
     fn assignment(&mut self) -> Result<Expr, errors::Error> {
-        let expr = self.or()?;
+        let expr = self.ternary()?;
         if let Some(source_token) = self.scanner.peek_next() {
             if source_token.token == lexemes::Token::Equal {
                 self.scanner.scan_next();
@@ -509,6 +546,26 @@ impl Parser {
         }
         Ok(expr)
     }
+    fn ternary(&mut self) -> Result<Expr, errors::Error> {
+        let mut expr = self.or()?;
+        while let Some(source_token) = self.scanner.peek_next() {
+            if source_token.token == TERNARY_TEST_TOKEN {
+                self.scanner.scan_next();
+                let left_result = self.or()?;
+                self.scanner
+                    .expect_and_scan_next(TERNARY_BRANCH_TOKEN, None)?;
+                let right_result = self.or()?;
+                expr = Expr::Ternary(TernaryExpr {
+                    condition: Box::new(expr),
+                    left_result: Box::new(left_result),
+                    right_result: Box::new(right_result),
+                });
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
     fn or(&mut self) -> Result<Expr, errors::Error> {
         let mut expr = self.and()?;
         while let Some(source_token) = self.scanner.peek_next() {
@@ -527,35 +584,15 @@ impl Parser {
         Ok(expr)
     }
     fn and(&mut self) -> Result<Expr, errors::Error> {
-        let mut expr = self.ternary()?;
+        let mut expr = self.equality()?;
         while let Some(source_token) = self.scanner.peek_next() {
             if source_token.token == lexemes::Token::And {
                 self.scanner.scan_next();
-                let right = self.ternary()?;
+                let right = self.equality()?;
                 expr = Expr::Logical(LogicalExpr {
                     left: Box::new(expr),
                     operator: source_token,
                     right: Box::new(right),
-                });
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-    fn ternary(&mut self) -> Result<Expr, errors::Error> {
-        let mut expr = self.equality()?;
-        while let Some(source_token) = self.scanner.peek_next() {
-            if source_token.token == TERNARY_TEST_TOKEN {
-                self.scanner.scan_next();
-                let left_result = self.equality()?;
-                self.scanner
-                    .expect_and_scan_next(TERNARY_BRANCH_TOKEN, None)?;
-                let right_result = self.equality()?;
-                expr = Expr::Ternary(TernaryExpr {
-                    condition: Box::new(expr),
-                    left_result: Box::new(left_result),
-                    right_result: Box::new(right_result),
                 });
             } else {
                 break;

@@ -1,10 +1,5 @@
-var value = 75;
-if (value > 100) {
-    print "Greater than 100";
-} else if (value > 50) {
-    print "Greater than 50";
-} else {
-    print "Not greater than 50";
-}
-var shortCircuit = false;
-print shortCircuit or value > 100 ? "Greater than 100" : "Less than 100";
+var value = 101;
+var shortCircuit = true;
+var msg = shortCircuit and value > 100 ? "Greater than 100" : "Less than 100";
+print msg;
+print shortCircuit and value > 100 ? "Greater than 100" : "Less than 100";
