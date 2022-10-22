@@ -215,13 +215,18 @@ trait Boolable {
     fn to_bool_option(&self) -> Option<bool>;
 }
 
+// TODO: Possibly get rid of this. Originally, I wanted some values not to even have a "truthy"
+// value, but then I changed my mind and hewed closer to the book (although the book simply accepts
+// any number or string as truthy, while I say 0 and the empty string is falsy). Considering that
+// all literal kinds now have a truthy value, this trait is redundant. Might keep it around in case
+// I change my mind though.
 impl Boolable for Value {
     fn to_bool_option(&self) -> Option<bool> {
         match self {
             Value::Boolean(value) => Some(*value),
             Value::Nil => Some(false),
-            Value::Number(_) => None,
-            Value::String(_) => None,
+            Value::Number(value) => Some(!(*value == 0.0)),
+            Value::String(value) => Some(!(*value == "")),
         }
     }
 }

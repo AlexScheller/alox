@@ -3,3 +3,6 @@ var shortCircuit = true;
 var msg = shortCircuit and value > 100 ? "Greater than 100" : "Less than 100";
 print msg;
 print shortCircuit and value > 100 ? "Greater than 100" : "Less than 100";
+print "hi" or 2;
+print nil or "yes";
+print 0 or "hello";

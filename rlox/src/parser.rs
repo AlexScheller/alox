@@ -338,7 +338,7 @@ const TERNARY_BRANCH_TOKEN: lexemes::Token = lexemes::Token::Colon;
 // In increasing order of precedence
 //
 // expression  -> assignment ;
-// assignment  -> IDENTIFIER "=" assignment | ternary; // TODO: Is this correct? even in the book, ternary is handled *before* the assignment logic
+// assignment  -> IDENTIFIER "=" assignment | ternary; // TODO: Is this correct? even in the book, ternary is handled *before* the assignment logic. Maybe it doesn't matter since it's or?
 // ternary     -> logic_or ( "?" logic_or ":" logic_or )* ;
 // logic_or    -> logic_and ( "or" logic_and )* ;
 // logic_and   -> equality ( "and" equality )* ;
