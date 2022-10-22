@@ -1,6 +1,6 @@
 // -----| Lexeme Scanner |-----
 
-use std::{error, fmt};
+use std::fmt;
 
 use crate::{
     errors,
@@ -117,11 +117,12 @@ impl Scanner {
 
 // -----| Statement Grammar |-----
 //
-// statement    -> epxrStmt | ifStmt | printStmt | block;
+// statement    -> epxrStmt | ifStmt | whileStmt | block | printStmt ;
 // exprStmt     -> expression ";" ;
 // ifStmt       -> "if" "(" expression ")" statement ( "else" statement )? ;
-// printStmt    -> "print" expression ";" ;
+// whileStmt    -> "while" "(" expression ")" statement;
 // block        -> "{" declaration* "}" ;
+// printStmt    -> "print" expression ";" ;
 
 pub struct ExprStmt {
     pub expression: Expr,
@@ -131,6 +132,11 @@ pub struct IfStmt {
     pub condition: Expr,
     pub then_branch: Box<Stmt>,
     pub else_branch: Option<Box<Stmt>>,
+}
+
+pub struct WhileStmt {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
 }
 
 // TODO: Get rid of this as soon as you have a standard library.
@@ -149,6 +155,7 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     Expression(ExprStmt),
     If(IfStmt),
+    While(WhileStmt),
     Print(PrintStmt),
     Var(VarStmt), // Is this a declaration or a statement?
 }
@@ -178,6 +185,9 @@ impl fmt::Display for Stmt {
                 } else {
                     format!("{{if ({}) then {}}}", &stmt.condition, &stmt.then_branch)
                 }
+            }
+            Stmt::While(stmt) => {
+                format!("{{while ({}) {} }}", &stmt.condition, &stmt.body)
             }
             Stmt::Print(stmt) => {
                 format!("{{print {}}}", &stmt.expression)
@@ -452,6 +462,9 @@ impl Parser {
         if self.scanner.matches_then_scan_next(lexemes::Token::If) {
             return self.if_statement();
         }
+        if self.scanner.matches_then_scan_next(lexemes::Token::While) {
+            return self.while_statement();
+        }
         if self.scanner.matches_then_scan_next(lexemes::Token::Print) {
             return self.print_statement();
         }
@@ -489,6 +502,19 @@ impl Parser {
             then_branch,
             else_branch,
         }))
+    }
+    fn while_statement(&mut self) -> Result<Stmt, errors::Error> {
+        self.scanner.expect_and_scan_next(
+            lexemes::Token::LeftParen,
+            Some(String::from("Expected '(' after 'while'")),
+        )?;
+        let condition = self.expression()?;
+        self.scanner.expect_and_scan_next(
+            lexemes::Token::RightParen,
+            Some(String::from("Expected ')' after 'while' condition")),
+        )?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::While(WhileStmt { condition, body }))
     }
     fn print_statement(&mut self) -> Result<Stmt, errors::Error> {
         let expression = self.expression()?;

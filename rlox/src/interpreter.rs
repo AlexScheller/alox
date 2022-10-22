@@ -35,6 +35,22 @@ impl Interpreter {
                 }
                 Err(error) => self.error_log.push(error),
             },
+            Stmt::While(stmt) => {
+                while match self.expression(stmt.condition) {
+                    Ok(value) => {
+                        if is_truthy(&value) {
+                            self.interpret(*stmt.body);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Err(error) => {
+                        self.error_log.push(error);
+                        false
+                    }
+                } {}
+            }
             Stmt::Print(stmt) => match self.expression(stmt.expression) {
                 Ok(value) => {
                     println!("{:?}", value);
