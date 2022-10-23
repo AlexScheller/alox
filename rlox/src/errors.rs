@@ -55,7 +55,7 @@ impl fmt::Display for Error {
 
         let subject_string = if let Some(subject_value) = &self.description.subject {
             format!(
-                ": {}",
+                "=> {}",
                 normalize_whitespace_chars_for_display(subject_value)
             )
         } else {
@@ -64,7 +64,7 @@ impl fmt::Display for Error {
 
         write!(
             f,
-            "{}{} Error ({}){}",
+            "{}{} Error: {}{}",
             location_string, kind_string, self.description.description, subject_string
         )
     }
