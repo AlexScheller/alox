@@ -17,29 +17,32 @@ impl Interpreter {
             error_log: errors::ErrorLog::new(),
         }
     }
-    pub fn interpret(&mut self, statement: Stmt) {
+    pub fn interpret(&mut self, statement: &Stmt) {
         match statement {
-            Stmt::Expression(stmt) => match self.expression(stmt.expression) {
+            Stmt::Expression(stmt) => match self.expression(&stmt.expression) {
                 Ok(_) => {}
                 Err(error) => self.error_log.push(error),
             },
-            Stmt::If(stmt) => match self.expression(stmt.condition) {
+            Stmt::If(stmt) => match self.expression(&stmt.condition) {
                 Ok(value) => {
                     if is_truthy(&value) {
-                        self.interpret(*stmt.then_branch);
+                        self.interpret(&stmt.then_branch);
                     } else {
-                        if let Some(else_branch) = stmt.else_branch {
-                            self.interpret(*else_branch);
+                        if let Some(else_branch) = &stmt.else_branch {
+                            self.interpret(else_branch);
                         }
                     }
                 }
                 Err(error) => self.error_log.push(error),
             },
+            // Kind of bugs me that the while loop does all the work in the condition expression,
+            // but it would end up potentially weirder to try and write it in in such a way that
+            // checking for errors is done as a separate step.
             Stmt::While(stmt) => {
-                while match self.expression(stmt.condition) {
+                while match self.expression(&stmt.condition) {
                     Ok(value) => {
                         if is_truthy(&value) {
-                            self.interpret(*stmt.body);
+                            self.interpret(&stmt.body);
                             true
                         } else {
                             false
@@ -51,13 +54,13 @@ impl Interpreter {
                     }
                 } {}
             }
-            Stmt::Print(stmt) => match self.expression(stmt.expression) {
+            Stmt::Print(stmt) => match self.expression(&stmt.expression) {
                 Ok(value) => {
                     println!("{:?}", value);
                 }
                 Err(error) => self.error_log.push(error),
             },
-            Stmt::Var(stmt) => match self.expression(stmt.initializer) {
+            Stmt::Var(stmt) => match self.expression(&stmt.initializer) {
                 Ok(value) => match self.environment.define(&stmt.name, value) {
                     Ok(_) => (),
                     Err(error) => self.error_log.push(error),
@@ -72,10 +75,10 @@ impl Interpreter {
             }
         }
     }
-    fn expression(&mut self, expression: Expr) -> Result<Value, errors::Error> {
+    fn expression(&mut self, expression: &Expr) -> Result<Value, errors::Error> {
         match expression {
-            Expr::Literal(literal) => Ok(literal),
-            Expr::Grouping(group) => self.expression(*group),
+            Expr::Literal(literal) => Ok(literal.clone()),
+            Expr::Grouping(group) => self.expression(group),
             Expr::Unary(unary) => self.unary_expression(unary),
             Expr::Binary(binary) => self.binary_expression(binary),
             Expr::Logical(logical) => self.logical_expression(logical),
@@ -86,9 +89,9 @@ impl Interpreter {
     }
     fn unary_expression(
         &mut self,
-        UnaryExpr { operator, right }: UnaryExpr,
+        UnaryExpr { operator, right }: &UnaryExpr,
     ) -> Result<Value, errors::Error> {
-        let right_literal = self.expression(*right)?;
+        let right_literal = self.expression(right)?;
         match operator.token {
             Token::Minus => {
                 if let Value::Number(value) = right_literal {
@@ -125,10 +128,10 @@ impl Interpreter {
             left,
             operator,
             right,
-        }: BinaryExpr,
+        }: &BinaryExpr,
     ) -> Result<Value, errors::Error> {
-        let left_literal = self.expression(*left)?;
-        let right_literal = self.expression(*right)?;
+        let left_literal = self.expression(left)?;
+        let right_literal = self.expression(right)?;
         let left_value = match left_literal {
             Value::Number(value) => value,
             _ => {
@@ -167,9 +170,9 @@ impl Interpreter {
             left,
             operator,
             right,
-        }: LogicalExpr,
+        }: &LogicalExpr,
     ) -> Result<Value, errors::Error> {
-        let left_literal = self.expression(*left)?;
+        let left_literal = self.expression(left)?;
         if operator.token == lexemes::Token::Or {
             if is_truthy(&left_literal) {
                 return Ok(left_literal);
@@ -180,7 +183,7 @@ impl Interpreter {
                 return Ok(left_literal);
             }
         }
-        self.expression(*right)
+        self.expression(right)
     }
     fn ternary_expression(
         &mut self,
@@ -188,17 +191,17 @@ impl Interpreter {
             condition,
             left_result,
             right_result,
-        }: TernaryExpr,
+        }: &TernaryExpr,
     ) -> Result<Value, errors::Error> {
-        let condition_literal = self.expression(*condition)?;
+        let condition_literal = self.expression(condition)?;
         // Note, we could check if this is "truthy" instead of an explicit boolean check.
         if let Value::Boolean(condition_value) = condition_literal {
             // This is an important decision. We currently short circuit, but that doesn't mean we
             // must. Perhaps it's valuable to let the other expression evaluate.
             if condition_value {
-                return self.expression(*left_result);
+                return self.expression(left_result);
             } else {
-                return self.expression(*right_result);
+                return self.expression(right_result);
             }
         } else {
             return Err(construct_runtime_error(format!(
@@ -209,14 +212,14 @@ impl Interpreter {
     }
     fn assignment_expression(
         &mut self,
-        AssignmentExpr { name, value }: AssignmentExpr,
+        AssignmentExpr { name, value }: &AssignmentExpr,
     ) -> Result<Value, errors::Error> {
-        let value = self.expression(*value)?;
+        let value = self.expression(value)?;
         self.environment.assign(&name, value.clone())?;
         Ok(value)
     }
-    fn block(&mut self, statements: Vec<Stmt>, new_environment: Environment) {
-        let previous_environment = self.environment.clone();
+    fn block(&mut self, statements: &Vec<Stmt>, new_environment: Environment) {
+        let previous_environment = self.environment.clone(); // This is broken.
         self.environment = new_environment;
         for statement in statements {
             self.interpret(statement);

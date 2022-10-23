@@ -72,8 +72,7 @@ fn interpret(
     }
 
     for statement in statements {
-        // println!("{}", statement);
-        interpreter.interpret(statement);
+        interpreter.interpret(&statement);
         if interpreter.get_error_log().len() > 0 {
             errors::print_error_log(interpreter.get_error_log());
             if should_exit_on_error {

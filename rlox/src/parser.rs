@@ -5,7 +5,7 @@ use std::fmt;
 use crate::{
     errors,
     lexemes::{self, Token},
-    source::SourceToken,
+    source::{self, SourceToken},
     utilities::enum_variant_equal,
 };
 
