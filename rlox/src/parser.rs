@@ -94,14 +94,17 @@ impl Scanner {
         panic!("Attempted to read previous token while at index 0");
     }
     pub fn synchronize_to_statement_boundary(&mut self) {
-        // TODO: Is it an issues that this doesn't somehow error when it reaches EOF without
-        // encountering a statment boundary?
-        while let Some(source_token) = self.scan_next() {
+        while let Some(source_token) = self.peek_next() {
+            // The book doesn't use an Eof, it requires special handling.
+            if source_token.token == lexemes::Token::Eof {
+                break;
+            }
+            self.scan_next();
             if source_token.token == lexemes::Token::Semicolon
                 || STATEMENT_BEGINNING_TOKENS.contains(&source_token.token)
             {
                 break;
-            };
+            }
         }
     }
 }
